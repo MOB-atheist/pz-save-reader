@@ -8,6 +8,19 @@ import {
 import { Button } from "@/components/ui/button";
 import { getPlayerById, type PlayerRow } from "@/lib/api-client";
 
+// Known PZ stat/skill names — don't show as "Username (from buffer)" when decoder misclassifies
+const KNOWN_STAT_SKILL_NAMES = new Set([
+  "Strength", "Fitness", "Sneak", "Nimble", "Sprinting", "Lightfoot", "Voice",
+  "Aiming", "Reloading", "Blade", "Blunt", "SmallBlade", "LongBlade", "Axe",
+  "SmallBlunt", "Spear", "Maintenance", "Carpentry", "Cooking", "Farming",
+  "Fishing", "Trapping", "Doctor", "Electricity", "Metalworking", "Melting",
+  "Tailoring", "Woodwork", "FirstAid", "Foraging",
+]);
+
+function isLikelyUsername(value: string): boolean {
+  return value.length >= 3 && value.length <= 20 && !KNOWN_STAT_SKILL_NAMES.has(value);
+}
+
 type Props = {
   id: number | string | null;
   open: boolean;
@@ -67,7 +80,7 @@ export function PlayerDetailDialog({ id, open, onOpenChange }: Props) {
                       <strong>Username</strong>: {data.username}
                     </li>
                   )}
-                  {e.usernameFromBuffer && e.usernameFromBuffer !== data.username && (
+                  {e.usernameFromBuffer && e.usernameFromBuffer !== data.username && isLikelyUsername(e.usernameFromBuffer) && (
                     <li>
                       <strong>Username (from buffer)</strong>: {e.usernameFromBuffer}
                     </li>
