@@ -474,7 +474,7 @@
             </div>
             <div id="page-players" class="page hidden">
                 <h1>Players</h1>
-                <input type="text" id="search-players" placeholder="Filter by name or profession..." />
+                <input type="text" id="search-players" placeholder="Filter by name, username or profession..." />
                 <div class="export-bar">
                     <span>Export filtered:</span>
                     <button type="button" class="btn-export" id="export-players-csv">CSV</button>
@@ -487,6 +487,7 @@
                         <tr>
                             <th>ID</th>
                             <th>Name</th>
+                            <th>Username</th>
                             <th>Profession</th>
                             <th>Position (X, Y)</th>
                             <th>Map</th>
@@ -881,6 +882,7 @@
                     ? allPlayers.filter(
                           (p) =>
                               (p.name && p.name.toLowerCase().includes(term)) ||
+                              (p.username && p.username.toLowerCase().includes(term)) ||
                               (p.profession && p.profession.toLowerCase().includes(term))
                       )
                     : allPlayers;
@@ -991,13 +993,14 @@
                 const rows = data.map((p) => ({
                     id: p.id,
                     name: p.name,
+                    username: p.username || "",
                     profession: p.profession || "",
                     x: p.x,
                     y: p.y,
                     z: p.z,
                     mapUrl: p.x != null && p.y != null ? "https://map.projectzomboid.com/#" + p.x + "x" + p.y : "",
                 }));
-                const headers = ["id", "name", "profession", "x", "y", "z", "mapUrl"];
+                const headers = ["id", "name", "username", "profession", "x", "y", "z", "mapUrl"];
                 const line = (row) => headers.map((h) => csvEscape(row[h])).join(",");
                 const csv = "\uFEFF" + headers.join(",") + "\n" + rows.map(line).join("\n");
                 downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), "players.csv");
@@ -1009,6 +1012,7 @@
                 const rows = data.map((p) => ({
                     id: p.id,
                     name: p.name,
+                    username: p.username || "",
                     profession: p.profession || "",
                     x: p.x,
                     y: p.y,
@@ -1031,6 +1035,7 @@
                 const rows = data.map((p) => ({
                     id: p.id,
                     name: p.name,
+                    username: p.username || "",
                     profession: p.profession || "",
                     x: p.x,
                     y: p.y,
@@ -1060,7 +1065,7 @@
                     renderPlayers(allPlayers);
                     updateExportPlayersState();
                 } catch (e) {
-                    $("player-list").innerHTML = '<tr><td colspan="6" class="error">Failed to load: ' + e.message + "</td></tr>";
+                    $("player-list").innerHTML = '<tr><td colspan="7" class="error">Failed to load: ' + e.message + "</td></tr>";
                 }
             }
 
@@ -1072,6 +1077,7 @@
                     <tr class="clickable" data-id="${p.id}" data-type="player">
                         <td>${p.id}</td>
                         <td>${escapeHtml(p.name)}</td>
+                        <td>${escapeHtml(p.username || "—")}</td>
                         <td>${escapeHtml(p.profession || "—")}</td>
                         <td>${p.x != null && p.y != null ? p.x + ", " + p.y : "—"}</td>
                         <td>${p.x != null && p.y != null ? '<a class="btn-map" href="https://map.projectzomboid.com/#' + p.x + 'x' + p.y + '" target="_blank">Open Map</a>' : "—"}</td>
@@ -1087,6 +1093,7 @@
                 const filtered = allPlayers.filter(
                     (p) =>
                         (p.name && p.name.toLowerCase().includes(term)) ||
+                        (p.username && p.username.toLowerCase().includes(term)) ||
                         (p.profession && p.profession.toLowerCase().includes(term))
                 );
                 renderPlayers(filtered);
@@ -1146,6 +1153,9 @@
                 let html = "";
                 html += '<div class="detail-section"><h3>Summary</h3><ul>';
                 html += "<li><strong>ID</strong>: " + data.id + "</li>";
+                if (data.username) {
+                    html += "<li><strong>Username</strong>: " + escapeHtml(data.username) + "</li>";
+                }
                 html += "<li><strong>Position</strong>: " + (data.x != null ? data.x : "—") + ", " + (data.y != null ? data.y : "—") + (data.z != null ? ", " + data.z : "") + "</li>";
                 if (e.characterNames && e.characterNames.length) {
                     html += "<li><strong>Names</strong>: " + escapeHtml(e.characterNames.join(", ")) + "</li>";
