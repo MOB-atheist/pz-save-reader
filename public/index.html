@@ -359,6 +359,16 @@
                 display: flex;
                 gap: 12px;
             }
+            .file-input-row {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                margin-bottom: 8px;
+            }
+            .file-input-row .file-name {
+                color: #888;
+                font-size: 0.9rem;
+            }
             .config-current {
                 background: #1a1a1a;
                 padding: 12px;
@@ -459,33 +469,30 @@
             </div>
             <div id="page-settings" class="page hidden">
                 <h1>Global configuration</h1>
-                <p style="color: #888; margin-bottom: 20px;">Set the folder that contains your Project Zomboid save files (vehicles.db and players.db). You can also set a custom path for each file.</p>
+                <p style="color: #888; margin-bottom: 20px;">Choose your Project Zomboid save files with the file picker, or enter a save folder path below and save.</p>
                 <div class="config-current" id="config-current">
                     <h3>Current paths</h3>
                     <p id="config-current-body">Loading…</p>
                 </div>
                 <form id="config-form">
                     <div class="form-group">
-                        <label for="config-save-folder">Save folder</label>
-                        <div class="input-with-browse">
-                            <input type="text" id="config-save-folder" placeholder="e.g. C:\Users\You\Zomboid\Saves\Multiplayer\servertest" />
-                            <button type="button" class="btn-browse" id="browse-save-folder" aria-label="Browse">Browse</button>
+                        <label>Choose files (opens your file browser)</label>
+                        <div class="file-input-row">
+                            <input type="file" id="file-vehicles" accept=".db" style="display: none" />
+                            <button type="button" class="btn-browse" id="trigger-vehicles">Choose vehicles.db</button>
+                            <span class="file-name" id="file-vehicles-name"></span>
                         </div>
-                        <div class="hint">Folder containing vehicles.db and players.db. Used when custom paths below are empty.</div>
+                        <div class="file-input-row">
+                            <input type="file" id="file-players" accept=".db" style="display: none" />
+                            <button type="button" class="btn-browse" id="trigger-players">Choose players.db</button>
+                            <span class="file-name" id="file-players-name"></span>
+                        </div>
+                        <div class="hint">Select vehicles.db and players.db from your Zomboid save folder. They will be uploaded and used for sync.</div>
                     </div>
                     <div class="form-group">
-                        <label for="config-vehicles-path">Vehicles DB path (optional override)</label>
-                        <div class="input-with-browse">
-                            <input type="text" id="config-vehicles-path" placeholder="Leave empty to use Save folder + vehicles.db" />
-                            <button type="button" class="btn-browse" id="browse-vehicles-path" aria-label="Browse">Browse</button>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label for="config-players-path">Players DB path (optional override)</label>
-                        <div class="input-with-browse">
-                            <input type="text" id="config-players-path" placeholder="Leave empty to use Save folder + players.db" />
-                            <button type="button" class="btn-browse" id="browse-players-path" aria-label="Browse">Browse</button>
-                        </div>
+                        <label for="config-save-folder">Or: Save folder path (alternative)</label>
+                        <input type="text" id="config-save-folder" placeholder="e.g. C:\Users\You\Zomboid\Saves\Multiplayer\servertest" />
+                        <div class="hint">If you prefer to use a path instead of choosing files, enter the folder here and click Save configuration.</div>
                     </div>
                     <button type="submit" class="btn-primary" id="config-save-btn">Save configuration</button>
                 </form>
@@ -500,23 +507,6 @@
                     <button type="button" class="modal-close" id="modal-close" aria-label="Close">&times;</button>
                 </div>
                 <div class="modal-body" id="modal-body"></div>
-            </div>
-        </div>
-
-        <div id="browse-overlay" class="modal-overlay hidden">
-            <div class="modal browse-modal">
-                <div class="modal-header">
-                    <h2 id="browse-title">Select folder</h2>
-                    <button type="button" class="modal-close" id="browse-close" aria-label="Close">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <p class="browse-path" id="browse-path-display"></p>
-                    <div class="browse-list" id="browse-list"></div>
-                    <div class="browse-actions">
-                        <button type="button" class="btn-primary" id="browse-select-btn">Select this folder</button>
-                        <button type="button" class="btn-secondary" id="browse-cancel-btn">Cancel</button>
-                    </div>
-                </div>
             </div>
         </div>
 
@@ -595,8 +585,6 @@
                     if (!res.ok) throw new Error(res.statusText);
                     const cfg = await res.json();
                     $("config-save-folder").value = cfg.saveFolder || "";
-                    $("config-vehicles-path").value = cfg.vehiclesDbPathOverride || "";
-                    $("config-players-path").value = cfg.playersDbPathOverride || "";
                     $("config-current-body").innerHTML = "Vehicles: " + escapeHtml(cfg.vehiclesDbPath) + "<br>Players: " + escapeHtml(cfg.playersDbPath);
                 } catch (e) {
                     $("config-current-body").textContent = "Failed to load: " + e.message;
@@ -612,16 +600,10 @@
                 status.classList.add("hidden");
                 try {
                     const saveFolder = $("config-save-folder").value.trim();
-                    const vehiclesDbPath = $("config-vehicles-path").value.trim();
-                    const playersDbPath = $("config-players-path").value.trim();
                     const res = await fetch("/api/config", {
                         method: "PUT",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            saveFolder: saveFolder || undefined,
-                            vehiclesDbPath: vehiclesDbPath || undefined,
-                            playersDbPath: playersDbPath || undefined,
-                        }),
+                        body: JSON.stringify({ saveFolder: saveFolder || undefined }),
                     });
                     if (!res.ok) throw new Error((await res.json()).error || res.statusText);
                     const cfg = await res.json();
@@ -638,95 +620,48 @@
                 }
             });
 
-            // Browse modal for path selection
-            let browseState = { targetInputId: null, mode: "folder", currentPath: "" };
+            // Native file picker: open Explorer and upload selected file
+            $("trigger-vehicles").addEventListener("click", () => $("file-vehicles").click());
+            $("trigger-players").addEventListener("click", () => $("file-players").click());
 
-            function pathJoin(dir, name) {
-                if (!dir) return name;
-                const sep = dir.indexOf("\\") !== -1 ? "\\" : "/";
-                return dir.replace(/[/\\]+$/, "") + sep + name;
-            }
-
-            function pathParent(p) {
-                const i = Math.max(p.lastIndexOf("\\"), p.lastIndexOf("/"));
-                return i <= 0 ? "" : p.substring(0, i);
-            }
-
-            async function loadBrowseList(pathParam) {
-                const pathDisplay = $("browse-path-display");
-                const listEl = $("browse-list");
-                pathDisplay.textContent = pathParam || "(Computer)";
-                listEl.innerHTML = "Loading…";
+            async function uploadDbFile(file, endpoint, nameEl) {
+                if (!file) return;
+                const base64 = await new Promise((resolve, reject) => {
+                    const r = new FileReader();
+                    r.onload = () => {
+                        const b64 = btoa(String.fromCharCode.apply(null, new Uint8Array(r.result)));
+                        resolve(b64);
+                    };
+                    r.onerror = reject;
+                    r.readAsArrayBuffer(file);
+                });
+                nameEl.textContent = "Uploading…";
                 try {
-                    const q = pathParam ? "?path=" + encodeURIComponent(pathParam) : "";
-                    const res = await fetch("/api/browse" + q);
-                    if (!res.ok) throw new Error((await res.json()).error || res.statusText);
-                    const data = await res.json();
-                    browseState.currentPath = data.path || pathParam || "";
-                    listEl.innerHTML = data.entries.map((e) => {
-                        const cls = e.isDirectory ? "folder" : "file";
-                        return '<div class="browse-entry ' + cls + '" data-name="' + escapeHtml(e.name) + '" data-dir="' + (e.isDirectory ? "1" : "0") + '">' + escapeHtml(e.name) + "</div>";
-                    }).join("");
+                    const res = await fetch(endpoint, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ content: base64 }),
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) throw new Error(data.error || res.statusText);
+                    nameEl.textContent = file.name + " ✓";
+                    loadConfigPage();
                 } catch (err) {
-                    listEl.innerHTML = "<div class=\"browse-entry\">Error: " + escapeHtml(err.message) + "</div>";
+                    nameEl.textContent = "";
+                    alert("Upload failed: " + (err.message || "Unknown error"));
                 }
             }
 
-            function openBrowseModal(targetInputId, mode) {
-                browseState.targetInputId = targetInputId;
-                browseState.mode = mode;
-                const input = $(targetInputId);
-                let startPath = (input && input.value && input.value.trim()) || "";
-                if (mode === "file" && startPath) {
-                    const sep = startPath.indexOf("\\") !== -1 ? "\\" : "/";
-                    const last = Math.max(startPath.lastIndexOf("\\"), startPath.lastIndexOf("/"));
-                    startPath = last > 0 ? startPath.substring(0, last) : "";
-                }
-                browseState.currentPath = startPath;
-                $("browse-title").textContent = mode === "folder" ? "Select folder" : "Select file";
-                $("browse-select-btn").textContent = mode === "folder" ? "Select this folder" : "Select this folder";
-                $("browse-select-btn").style.display = mode === "folder" ? "inline-block" : "none";
-                $("browse-overlay").classList.remove("hidden");
-                loadBrowseList(startPath);
-            }
-
-            function closeBrowseModal() {
-                $("browse-overlay").classList.add("hidden");
-                browseState.targetInputId = null;
-            }
-
-            $("browse-close").addEventListener("click", closeBrowseModal);
-            $("browse-cancel-btn").addEventListener("click", closeBrowseModal);
-            $("browse-select-btn").addEventListener("click", () => {
-                if (browseState.mode === "folder" && browseState.targetInputId) {
-                    $(browseState.targetInputId).value = browseState.currentPath;
-                    closeBrowseModal();
-                }
+            $("file-vehicles").addEventListener("change", (e) => {
+                const file = e.target.files && e.target.files[0];
+                if (file) uploadDbFile(file, "/api/upload/vehicles", $("file-vehicles-name"));
+                e.target.value = "";
             });
-
-            $("browse-list").addEventListener("click", (e) => {
-                const entry = e.target.closest(".browse-entry");
-                if (!entry) return;
-                const name = entry.getAttribute("data-name");
-                const isDir = entry.getAttribute("data-dir") === "1";
-                if (!name) return;
-                if (isDir) {
-                    if (name === "..") {
-                        loadBrowseList(pathParent(browseState.currentPath));
-                    } else {
-                        loadBrowseList(pathJoin(browseState.currentPath, name));
-                    }
-                } else {
-                    if (browseState.mode === "file" && browseState.targetInputId) {
-                        $(browseState.targetInputId).value = pathJoin(browseState.currentPath, name);
-                        closeBrowseModal();
-                    }
-                }
+            $("file-players").addEventListener("change", (e) => {
+                const file = e.target.files && e.target.files[0];
+                if (file) uploadDbFile(file, "/api/upload/players", $("file-players-name"));
+                e.target.value = "";
             });
-
-            $("browse-save-folder").addEventListener("click", () => openBrowseModal("config-save-folder", "folder"));
-            $("browse-vehicles-path").addEventListener("click", () => openBrowseModal("config-vehicles-path", "file"));
-            $("browse-players-path").addEventListener("click", () => openBrowseModal("config-players-path", "file"));
 
             // Vehicles
             async function loadVehicles() {

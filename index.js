@@ -15,6 +15,7 @@ app.use(express.json());
 
 // API routes must be registered before static so POST /api/sync etc. are always handled
 const SNAPSHOT_DIR = path.join(__dirname, "data", "snapshots");
+const SOURCE_DIR = path.join(__dirname, "data", "source");
 
 function getPaths() {
     const raw = runtimeConfig.load();
@@ -181,6 +182,57 @@ app.get("/api/browse", (req, res) => {
     }
 });
 
+// --- API: Upload DB file (native file picker → save to data/source, update config) ---
+function ensureSourceDir() {
+    if (!fs.existsSync(SOURCE_DIR)) {
+        fs.mkdirSync(SOURCE_DIR, { recursive: true });
+    }
+}
+
+app.post("/api/upload/vehicles", (req, res) => {
+    try {
+        const content = req.body && req.body.content;
+        if (typeof content !== "string") return res.status(400).json({ error: "Missing content (base64)" });
+        ensureSourceDir();
+        const dest = path.join(SOURCE_DIR, "vehicles.db");
+        fs.writeFileSync(dest, Buffer.from(content, "base64"));
+        const raw = runtimeConfig.load() || {};
+        runtimeConfig.save({ ...raw, vehiclesDbPath: dest });
+        const paths = getPaths();
+        if (paths && paths.vehiclesDbPath && paths.playersDbPath && fs.existsSync(paths.playersDbPath)) {
+            return syncFromSnapshots((err) => {
+                if (err) return res.status(500).json({ error: err.message });
+                res.json({ ok: true, path: dest });
+            });
+        }
+        res.json({ ok: true, path: dest });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post("/api/upload/players", (req, res) => {
+    try {
+        const content = req.body && req.body.content;
+        if (typeof content !== "string") return res.status(400).json({ error: "Missing content (base64)" });
+        ensureSourceDir();
+        const dest = path.join(SOURCE_DIR, "players.db");
+        fs.writeFileSync(dest, Buffer.from(content, "base64"));
+        const raw = runtimeConfig.load() || {};
+        runtimeConfig.save({ ...raw, playersDbPath: dest });
+        const paths = getPaths();
+        if (paths && paths.vehiclesDbPath && paths.playersDbPath && fs.existsSync(paths.vehiclesDbPath)) {
+            return syncFromSnapshots((err) => {
+                if (err) return res.status(500).json({ error: err.message });
+                res.json({ ok: true, path: dest });
+            });
+        }
+        res.json({ ok: true, path: dest });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // --- API: Config (global settings) ---
 app.get("/api/config", (req, res) => {
     try {
@@ -193,10 +245,11 @@ app.get("/api/config", (req, res) => {
 app.put("/api/config", (req, res) => {
     try {
         const body = req.body || {};
+        const raw = runtimeConfig.load() || {};
         runtimeConfig.save({
-            saveFolder: body.saveFolder,
-            vehiclesDbPath: body.vehiclesDbPath,
-            playersDbPath: body.playersDbPath,
+            saveFolder: body.saveFolder !== undefined ? body.saveFolder : raw.saveFolder,
+            vehiclesDbPath: body.vehiclesDbPath !== undefined ? body.vehiclesDbPath : raw.vehiclesDbPath,
+            playersDbPath: body.playersDbPath !== undefined ? body.playersDbPath : raw.playersDbPath,
         });
         const paths = getPaths();
         if (!paths) {
