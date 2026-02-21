@@ -85,11 +85,6 @@ export function PlayerDetailDialog({ id, open, onOpenChange }: Props) {
     const e = data?.extracted ?? {};
     const raw = data?.raw ?? [];
 
-    console.log({
-        data,
-        skillz: Object.entries(data?.extracted?.skillLevels ?? {}),
-    });
-
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
@@ -156,11 +151,11 @@ export function PlayerDetailDialog({ id, open, onOpenChange }: Props) {
                                     ) : null}
                                     {e.traitOrSkillIds?.length ? (
                                         <li>
-                                            <strong>Traits / skills</strong>:{" "}
+                                            <strong>Traits</strong>:{" "}
                                             {e.traitOrSkillIds
-                                                .slice(0, 15)
+                                                .slice(0, 20)
                                                 .join(", ")}
-                                            {e.traitOrSkillIds.length > 15
+                                            {e.traitOrSkillIds.length > 20
                                                 ? " …"
                                                 : ""}
                                         </li>
