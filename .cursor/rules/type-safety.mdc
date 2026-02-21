@@ -1,0 +1,179 @@
+---
+description: 
+globs: *.ts,*.tsx
+alwaysApply: false
+---
+# Type Safety and Data Structure Best Practices
+
+This document outlines best practices for handling types and data structures in TypeScript, with a focus on preventing type casting issues and ensuring proper data flow.
+
+## 1. Type Casting and Data Flow
+
+### ❌ Anti-patterns to Avoid
+
+- **Forced Type Casting:**
+  ```typescript
+  // DON'T: Force type casting without ensuring data structure
+  const item = items.find(item => item.isMainProduct) as ComplexType;
+  ```
+
+- **Extending Core Types Without Source Changes:**
+  ```typescript
+  // DON'T: Extend store types without updating the store
+  interface ExtendedStoreItem extends StoreItem {
+    newField: string; // This field doesn't exist in the store
+  }
+  ```
+
+### ✅ Recommended Approaches
+
+1. **Props-Based Data Extension:**
+  ```typescript
+  // DO: Receive additional data as props
+  interface ComponentProps {
+    baseItem: StoreItem;
+    additionalData: {
+      newField: string;
+    };
+  }
+  ```
+
+2. **Store-First Development:**
+  ```typescript
+  // DO: Update store types first, then consume
+  interface StoreItem {
+    existingField: string;
+    newField: string; // Added to store first
+  }
+  ```
+
+## 2. Data Flow Patterns
+
+### Component Data Flow
+
+1. **Explicit Props Pattern:**
+  ```typescript
+  // DO: Make data requirements explicit
+  interface PricingDisplayProps {
+    price: number;
+    discounts?: {
+      amount: number;
+      type: 'percentage' | 'fixed';
+    };
+  }
+  ```
+
+2. **Store Integration Pattern:**
+  ```typescript
+  // DO: Use store selector pattern
+  const { data } = useStore(state => ({
+    data: state.requiredData
+  }));
+  ```
+
+### Store Integration Rules
+
+1. **Store Type Definition First:**
+   - Define complete store types before component development
+   - Document all required fields
+   - Include optional fields in the type definition
+
+2. **Type Extension Strategy:**
+   - Update store types when new fields are needed
+   - Create migration plan for existing data
+   - Document type changes in changelog
+
+## 3. Component Development Flow
+
+1. **Planning Phase:**
+   - Review existing store types
+   - Identify required data fields
+   - Plan type changes if needed
+
+2. **Implementation Phase:**
+   - Update store types if necessary
+   - Implement store changes
+   - Create components using updated types
+
+3. **Validation Phase:**
+   - Verify type completeness
+   - Test with all possible data states
+   - Document type requirements
+
+## 4. Common Pitfalls
+
+### Type Safety Issues
+
+1. **Incomplete Data Structures:**
+  ```typescript
+  // DON'T: Assume optional fields exist
+  const value = item.optional!.value; // Unsafe
+
+  // DO: Handle optional fields safely
+  const value = item.optional?.value ?? defaultValue;
+  ```
+
+2. **Implicit Type Assumptions:**
+  ```typescript
+  // DON'T: Assume store data shape
+  const data = useStore() as AssumedType;
+
+  // DO: Define explicit selectors
+  const data = useStore(state => ({
+    field: state.field as ExpectedType
+  }));
+  ```
+
+## 5. Implementation Checklist
+
+Before implementing components that need extended data:
+
+- [ ] Review existing store types
+- [ ] Identify missing fields
+- [ ] Choose implementation strategy:
+  - [ ] Update store types (preferred)
+  - [ ] Use props for additional data
+- [ ] Document type changes
+- [ ] Update affected components
+
+## 6. Type Extension Decision Tree
+
+1. **New Field Needed**
+   ```
+   Is field used in multiple components?
+   ├── Yes → Update store types
+   └── No → Is field part of core functionality?
+       ├── Yes → Update store types
+       └── No → Use props
+   ```
+
+2. **Existing Type Modification**
+   ```
+   Is change breaking?
+   ├── Yes → Create migration plan
+   └── No → Update types directly
+   ```
+
+## 7. Best Practices Summary
+
+1. **Store Management:**
+   - Keep store as single source of truth
+   - Update store types before component changes
+   - Document type changes and migrations
+
+2. **Component Development:**
+   - Use explicit props for component-specific data
+   - Avoid type casting without validation
+   - Handle optional fields safely
+
+3. **Type Safety:**
+   - Use TypeScript strict mode
+   - Avoid `any` and forced type assertions
+   - Implement proper null checks
+
+4. **Documentation:**
+   - Document type requirements
+   - Maintain changelog for type changes
+   - Include examples of proper usage
+
+Follow these guidelines to maintain type safety and prevent issues with data structure mismatches. 

@@ -1,0 +1,97 @@
+---
+description: 
+globs: *.ts,*.tsx
+alwaysApply: false
+---
+# Safe Refactoring Guidelines
+
+## Before Making Changes
+
+- **Analyze Existing Code Structure**
+  - Use `codebase_search` to understand current implementation
+  - Check for existing similar functionality
+  - Review import patterns in related files
+  - Document dependencies between components
+
+- **Plan Changes**
+  - List all files that need modification
+  - Identify potential ripple effects
+  - Consider impact on types and interfaces
+  - Plan changes in order of dependency
+
+## During Refactoring
+
+- **Incremental Changes**
+  - Make one change at a time
+  - Verify each change before proceeding
+  - Keep track of remaining work
+  - Don't start new changes until current ones work
+
+- **Type Safety**
+  - Update types before changing implementation
+  - Use TypeScript to catch errors early
+  - Don't ignore type errors
+  - Test type changes with real usage
+
+## Common Mistakes to Avoid
+
+1. **Rushing to Implementation**
+   - ❌ DON'T: Start coding without understanding existing code
+   ```typescript
+   // Wrong: Creating new type without checking existing ones
+   type TaskForm = { /* ... */ }
+   ```
+   - ✅ DO: Search for existing code first
+   ```typescript
+   // Right: Check for existing types
+   import type { TaskFormValues } from "@/app/types/form";
+   ```
+
+2. **Ignoring Error Messages**
+   - ❌ DON'T: Ignore TypeScript errors
+   - ✅ DO: Fix errors before continuing
+   - Document error patterns and solutions
+
+3. **Incomplete Changes**
+   - ❌ DON'T: Leave partial changes
+   - ✅ DO: Complete one change before starting another
+   - Update all related files
+
+## Best Practices
+
+- **Documentation**
+  - Update comments and types together
+  - Document breaking changes
+  - Keep a change log
+  - Add examples for complex changes
+
+- **Testing**
+  - Test changes incrementally
+  - Verify type safety
+  - Check edge cases
+  - Test integration points
+
+- **Review**
+  - Self-review changes
+  - Check for consistency
+  - Verify import paths
+  - Test the full feature
+
+## Tools to Use
+
+1. **Before Changes**
+   - `codebase_search` for existing code
+   - `grep_search` for exact matches
+   - `list_dir` for file structure
+   - `file_search` for similar files
+
+2. **During Changes**
+   - `read_file` to verify context
+   - `edit_file` for precise changes
+   - Check linter errors after each change
+
+3. **After Changes**
+   - Verify all imports work
+   - Check for type errors
+   - Test the changes
+   - Update documentation 

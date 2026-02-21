@@ -1,0 +1,134 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# File and Folder Naming Conventions
+
+This rule enforces consistent naming conventions for files and folders across the project.
+
+## General Rules
+
+- **Use kebab-case for all files and folders**
+  - Words should be lowercase and separated by hyphens
+  - Example: `password-strength-indicator.tsx`, `form-field.tsx`
+  - This improves readability and URL-friendliness
+
+## File Naming
+
+- **Component Files:**
+  ```typescript
+  // ✅ DO: Use kebab-case for component files
+  password-strength-indicator.tsx
+  form-field.tsx
+  user-profile.tsx
+
+  // ❌ DON'T: Use PascalCase or camelCase
+  PasswordStrengthIndicator.tsx
+  formField.tsx
+  UserProfile.tsx
+  ```
+
+- **Utility Files:**
+  ```typescript
+  // ✅ DO: Use kebab-case for utility files
+  string-utils.ts
+  date-formatter.ts
+  api-client.ts
+
+  // ❌ DON'T: Use other naming conventions
+  stringUtils.ts
+  DateFormatter.ts
+  APIClient.ts
+  ```
+
+- **Constants Files:**
+  ```typescript
+  // ✅ DO: Use kebab-case for constant files
+  validation-rules.ts
+  api-endpoints.ts
+  theme-constants.ts
+
+  // ❌ DON'T: Use other naming conventions
+  validationRules.ts
+  ApiEndpoints.ts
+  THEME_CONSTANTS.ts
+  ```
+
+## Directory Naming
+
+- **Module Directories:**
+  ```
+  // ✅ DO: Use kebab-case for module directories
+  src/modules/user-authentication/
+  src/modules/task-management/
+
+  // ❌ DON'T: Use other naming conventions
+  src/modules/userAuthentication/
+  src/modules/TaskManagement/
+  ```
+
+- **Feature Directories:**
+  ```
+  // ✅ DO: Use kebab-case for feature directories
+  src/features/user-profile/
+  src/features/task-list/
+
+  // ❌ DON'T: Use other naming conventions
+  src/features/userProfile/
+  src/features/TaskList/
+  ```
+
+## Special Cases
+
+- **Test Files:**
+  - Should match the name of the file being tested with `.test` or `.spec` suffix
+  - Example: `password-strength-indicator.test.tsx`
+
+- **Style Files:**
+  - Should match the component name with appropriate extension
+  - Example: `password-strength-indicator.module.css`
+
+- **Type Definition Files:**
+  - Should use `.d.ts` extension with kebab-case name
+  - Example: `api-types.d.ts`
+
+## Implementation Notes
+
+- When refactoring existing files to follow this convention:
+  1. Update imports in all files referencing the renamed file
+  2. Update any route definitions that might reference the file
+  3. Update any configuration files that might reference the file
+  4. Update any documentation or comments referencing the file
+
+- Consider using a script to automate the renaming process for large codebases
+
+## Examples from Current Codebase
+
+```typescript
+// ✅ DO: Follow this structure
+src/modules/register/
+  ├── components/
+  │   ├── password-strength-indicator.tsx
+  │   └── form-field.tsx
+  ├── constants/
+  │   └── password-validation.ts
+  ├── utils/
+  │   └── password-utils.ts
+  ├── hooks/
+  │   └── use-register-form.ts
+  └── index.tsx
+
+// ❌ DON'T: Mix naming conventions
+src/modules/register/
+  ├── components/
+  │   ├── PasswordStrengthIndicator.tsx
+  │   └── FormField.tsx
+  ├── constants/
+  │   └── passwordValidation.ts
+  ├── utils/
+  │   └── passwordUtils.ts
+  ├── hooks/
+  │   └── useRegisterForm.ts
+  └── index.tsx
+``` 
