@@ -57,9 +57,45 @@ A small manager for Project Zomboid save data: view vehicles and players from yo
 | ---------- | ------------------------------------------------ |
 | `start`    | Run API + Vite dev server together (development) |
 | `dev`      | Start Vite dev server only                       |
-| `server`   | Start Express API server only                     |
+| `server`   | Start Express API server only                    |
 | `build`    | TypeScript build + Vite production               |
-| `preview`  | Preview production build (Vite)                   |
+| `preview`  | Preview production build (Vite)                  |
+| `electron` | Run the app in an Electron window (requires `npm run build` first) |
+| `dist`     | Build frontend and package with Electron for distribution (see below) |
+
+## Building for distribution
+
+The app can be packaged as a desktop application (Electron) for Windows and Linux so users can run it without installing Node.js.
+
+1. **Install dependencies** (including Electron and electron-builder):
+
+   ```bash
+   npm install
+   ```
+
+   The `postinstall` script runs `electron-rebuild` so the `sqlite3` native module is built for Electron’s Node version.
+
+2. **Build the frontend and package:**
+
+   ```bash
+   npm run dist
+   ```
+
+   This runs `npm run build` then `electron-builder`. Outputs are placed in the **`release/`** directory:
+
+   - **Windows:** `release/PZ Manager 1.0.0 Setup.exe` (NSIS installer) and `release/PZ Manager 1.0.0.exe` (portable).
+   - **Linux:** `release/PZ Manager 1.0.0.AppImage` (and/or other targets if configured).
+
+3. **Testing the Electron app locally** (without building installers):
+
+   ```bash
+   npm run build
+   npm run electron
+   ```
+
+   The app opens in its own window and uses config/cache under your user data directory (e.g. `%APPDATA%/pz-manager` on Windows, `~/.config/pz-manager` on Linux).
+
+**Note:** Windows and Linux installers are best built on their respective platforms so the `sqlite3` native addon is compiled for the correct OS. To build for the current platform only, run `electron-builder` with a target, e.g. `npx electron-builder --win` or `npx electron-builder --linux`.
 
 ## Configuration
 
