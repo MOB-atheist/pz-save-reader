@@ -34,6 +34,23 @@
             .nav a.active {
                 color: #fff;
             }
+            .btn-refresh {
+                margin-left: auto;
+                background: #444;
+                color: #eee;
+                border: 1px solid #555;
+                padding: 8px 14px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 0.9rem;
+            }
+            .btn-refresh:hover:not(:disabled) {
+                background: #555;
+            }
+            .btn-refresh:disabled {
+                opacity: 0.6;
+                cursor: not-allowed;
+            }
             .page {
                 padding: 20px;
                 max-width: 1200px;
@@ -371,6 +388,7 @@
             <a href="#/vehicles" id="nav-vehicles">Vehicles</a>
             <a href="#/players" id="nav-players">Players</a>
             <a href="#/settings" id="nav-settings">Settings</a>
+            <button type="button" class="btn-refresh" id="nav-refresh" title="Resync data from game files">Refresh</button>
         </nav>
 
         <main id="app">
@@ -520,6 +538,28 @@
             if (initialHash === "/players") showPage("players");
             else if (initialHash === "/settings") showPage("settings");
             else showPage("vehicles");
+
+            // Refresh: resync from game files, then reload lists
+            $("nav-refresh").addEventListener("click", async () => {
+                const btn = $("nav-refresh");
+                btn.disabled = true;
+                try {
+                    const res = await fetch("/api/sync", { method: "POST" });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) throw new Error(data.error || res.statusText);
+                    allVehicles = [];
+                    allPlayers = [];
+                    await loadVehicles();
+                    await loadPlayers();
+                    btn.disabled = false;
+                    btn.textContent = "Refreshed!";
+                    setTimeout(() => { btn.textContent = "Refresh"; }, 2000);
+                } catch (err) {
+                    btn.disabled = false;
+                    btn.textContent = "Refresh";
+                    alert("Refresh failed: " + (err.message || "Unknown error"));
+                }
+            });
 
             // Settings / Config page
             async function loadConfigPage() {

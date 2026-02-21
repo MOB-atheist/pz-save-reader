@@ -214,6 +214,18 @@ app.put("/api/config", (req, res) => {
     }
 });
 
+// --- API: Sync (copy game DBs → cache; same logic as config save) ---
+app.post("/api/sync", (req, res) => {
+    const paths = getPaths();
+    if (!paths) {
+        return res.status(400).json({ error: "No configuration set. Set save folder or DB paths in Settings first." });
+    }
+    syncFromSnapshots((err) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ ok: true });
+    });
+});
+
 // --- API: Vehicles (from cache; no decode on request) ---
 app.get("/api/vehicles", (req, res) => {
     cacheDb.getVehicles((err, list) => {
