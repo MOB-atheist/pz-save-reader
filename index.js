@@ -198,13 +198,6 @@ app.post("/api/upload/vehicles", (req, res) => {
         fs.writeFileSync(dest, Buffer.from(content, "base64"));
         const raw = runtimeConfig.load() || {};
         runtimeConfig.save({ ...raw, vehiclesDbPath: dest });
-        const paths = getPaths();
-        if (paths && paths.vehiclesDbPath && paths.playersDbPath && fs.existsSync(paths.playersDbPath)) {
-            return syncFromSnapshots((err) => {
-                if (err) return res.status(500).json({ error: err.message });
-                res.json({ ok: true, path: dest });
-            });
-        }
         res.json({ ok: true, path: dest });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -220,13 +213,6 @@ app.post("/api/upload/players", (req, res) => {
         fs.writeFileSync(dest, Buffer.from(content, "base64"));
         const raw = runtimeConfig.load() || {};
         runtimeConfig.save({ ...raw, playersDbPath: dest });
-        const paths = getPaths();
-        if (paths && paths.vehiclesDbPath && paths.playersDbPath && fs.existsSync(paths.vehiclesDbPath)) {
-            return syncFromSnapshots((err) => {
-                if (err) return res.status(500).json({ error: err.message });
-                res.json({ ok: true, path: dest });
-            });
-        }
         res.json({ ok: true, path: dest });
     } catch (e) {
         res.status(500).json({ error: e.message });

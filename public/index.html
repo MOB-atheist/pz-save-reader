@@ -369,6 +369,35 @@
                 color: #888;
                 font-size: 0.9rem;
             }
+            .upload-status {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                margin-top: 12px;
+                padding: 10px 12px;
+                background: #1a1a1a;
+                border-radius: 4px;
+                font-size: 0.9rem;
+                color: #aaa;
+            }
+            .upload-status.hidden {
+                display: none;
+            }
+            .upload-status-spinner {
+                display: inline-block;
+                width: 18px;
+                height: 18px;
+                border: 2px solid rgba(255,255,255,0.2);
+                border-top-color: #00a8ff;
+                border-radius: 50%;
+                animation: upload-spin 0.7s linear infinite;
+            }
+            .upload-status.success .upload-status-spinner {
+                display: none;
+            }
+            @keyframes upload-spin {
+                to { transform: rotate(360deg); }
+            }
             .config-current {
                 background: #1a1a1a;
                 padding: 12px;
@@ -476,23 +505,33 @@
                 </div>
                 <form id="config-form">
                     <div class="form-group">
-                        <label>Choose files (opens your file browser)</label>
-                        <div class="file-input-row">
+                        <label>Choose files (opens your file browser) or enter paths</label>
+                        <div class="file-input-row input-with-browse">
+                            <input type="text" id="config-vehicles-path" placeholder="Path to vehicles.db (optional)" />
                             <input type="file" id="file-vehicles" accept=".db" style="display: none" />
                             <button type="button" class="btn-browse" id="trigger-vehicles">Choose vehicles.db</button>
                             <span class="file-name" id="file-vehicles-name"></span>
                         </div>
-                        <div class="file-input-row">
+                        <div class="file-input-row input-with-browse">
+                            <input type="text" id="config-players-path" placeholder="Path to players.db (optional)" />
                             <input type="file" id="file-players" accept=".db" style="display: none" />
                             <button type="button" class="btn-browse" id="trigger-players">Choose players.db</button>
                             <span class="file-name" id="file-players-name"></span>
                         </div>
-                        <div class="hint">Select vehicles.db and players.db from your Zomboid save folder. They will be uploaded and used for sync.</div>
+                        <div class="hint">Type a path or use the button to pick a file. Use Save configuration to apply paths.</div>
+                        <div id="upload-status" class="upload-status hidden">
+                            <span class="upload-status-spinner" id="upload-status-spinner" aria-hidden="true"></span>
+                            <span id="upload-status-msg"></span>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label for="config-save-folder">Or: Save folder path (alternative)</label>
-                        <input type="text" id="config-save-folder" placeholder="e.g. C:\Users\You\Zomboid\Saves\Multiplayer\servertest" />
-                        <div class="hint">If you prefer to use a path instead of choosing files, enter the folder here and click Save configuration.</div>
+                        <div class="input-with-browse">
+                            <input type="text" id="config-save-folder" placeholder="e.g. C:\Users\You\Zomboid\Saves\Multiplayer\servertest" />
+                            <input type="file" id="file-folder" webkitdirectory directory style="display: none" />
+                            <button type="button" class="btn-browse" id="trigger-save-folder" title="Choose folder (opens file browser)">Choose folder</button>
+                        </div>
+                        <div class="hint">Pick a folder with the button (uploads vehicles.db and players.db, then syncs) or type a path and click Save configuration.</div>
                     </div>
                     <button type="submit" class="btn-primary" id="config-save-btn">Save configuration</button>
                 </form>
@@ -585,6 +624,8 @@
                     if (!res.ok) throw new Error(res.statusText);
                     const cfg = await res.json();
                     $("config-save-folder").value = cfg.saveFolder || "";
+                    $("config-vehicles-path").value = cfg.vehiclesDbPathOverride || "";
+                    $("config-players-path").value = cfg.playersDbPathOverride || "";
                     $("config-current-body").innerHTML = "Vehicles: " + escapeHtml(cfg.vehiclesDbPath) + "<br>Players: " + escapeHtml(cfg.playersDbPath);
                 } catch (e) {
                     $("config-current-body").textContent = "Failed to load: " + e.message;
@@ -600,10 +641,16 @@
                 status.classList.add("hidden");
                 try {
                     const saveFolder = $("config-save-folder").value.trim();
+                    const vehiclesDbPath = $("config-vehicles-path").value.trim();
+                    const playersDbPath = $("config-players-path").value.trim();
                     const res = await fetch("/api/config", {
                         method: "PUT",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ saveFolder: saveFolder || undefined }),
+                        body: JSON.stringify({
+                            saveFolder: saveFolder || undefined,
+                            vehiclesDbPath: vehiclesDbPath || undefined,
+                            playersDbPath: playersDbPath || undefined,
+                        }),
                     });
                     if (!res.ok) throw new Error((await res.json()).error || res.statusText);
                     const cfg = await res.json();
@@ -620,13 +667,13 @@
                 }
             });
 
-            // Native file picker: open Explorer and upload selected file
+            // Native file / folder picker: open Explorer and upload
+            $("trigger-save-folder").addEventListener("click", () => $("file-folder").click());
             $("trigger-vehicles").addEventListener("click", () => $("file-vehicles").click());
             $("trigger-players").addEventListener("click", () => $("file-players").click());
 
-            async function uploadDbFile(file, endpoint, nameEl) {
-                if (!file) return;
-                const base64 = await new Promise((resolve, reject) => {
+            function fileToBase64(file) {
+                return new Promise((resolve, reject) => {
                     const r = new FileReader();
                     r.onload = () => {
                         const b64 = btoa(String.fromCharCode.apply(null, new Uint8Array(r.result)));
@@ -635,7 +682,86 @@
                     r.onerror = reject;
                     r.readAsArrayBuffer(file);
                 });
-                nameEl.textContent = "Uploading…";
+            }
+
+            async function uploadFromFolder(files) {
+                const vehiclesFile = Array.from(files).find((f) => f.name.toLowerCase() === "vehicles.db");
+                const playersFile = Array.from(files).find((f) => f.name.toLowerCase() === "players.db");
+                if (!vehiclesFile || !playersFile) {
+                    alert("Folder must contain both vehicles.db and players.db.");
+                    return;
+                }
+                const statusEl = $("upload-status");
+                const msgEl = $("upload-status-msg");
+                const vehiclesNameEl = $("file-vehicles-name");
+                const playersNameEl = $("file-players-name");
+                statusEl.classList.remove("hidden", "success");
+                msgEl.textContent = "Uploading…";
+                vehiclesNameEl.textContent = "";
+                playersNameEl.textContent = "";
+                try {
+                    const [vB64, pB64] = await Promise.all([fileToBase64(vehiclesFile), fileToBase64(playersFile)]);
+                    const vRes = await fetch("/api/upload/vehicles", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ content: vB64 }),
+                    });
+                    const vData = await vRes.json().catch(() => ({}));
+                    if (!vRes.ok) throw new Error(vData.error || vRes.statusText);
+                    msgEl.textContent = "Uploading…";
+                    const pRes = await fetch("/api/upload/players", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ content: pB64 }),
+                    });
+                    const pData = await pRes.json().catch(() => ({}));
+                    if (!pRes.ok) throw new Error(pData.error || pRes.statusText);
+                    msgEl.textContent = "Syncing tables…";
+                    const syncRes = await fetch("/api/sync", { method: "POST" });
+                    const syncData = await syncRes.json().catch(() => ({}));
+                    if (!syncRes.ok) {
+                        msgEl.textContent = "Saved. Sync failed.";
+                    } else {
+                        msgEl.textContent = "Finished.";
+                    }
+                    statusEl.classList.add("success");
+                    vehiclesNameEl.textContent = "vehicles.db ✓";
+                    playersNameEl.textContent = "players.db ✓";
+                    loadConfigPage();
+                    setTimeout(() => {
+                        statusEl.classList.add("hidden");
+                        statusEl.classList.remove("success");
+                    }, 2500);
+                } catch (err) {
+                    statusEl.classList.add("hidden");
+                    vehiclesNameEl.textContent = "";
+                    playersNameEl.textContent = "";
+                    alert("Failed: " + (err.message || "Unknown error"));
+                }
+            }
+
+            $("file-folder").addEventListener("change", (e) => {
+                const files = e.target.files;
+                if (files && files.length) uploadFromFolder(files);
+                e.target.value = "";
+            });
+
+            async function uploadDbFile(file, endpoint, nameEl) {
+                if (!file) return;
+                const statusEl = $("upload-status");
+                const spinnerEl = $("upload-status-spinner");
+                const msgEl = $("upload-status-msg");
+                statusEl.classList.remove("hidden", "success");
+                msgEl.textContent = "Uploading…";
+                nameEl.textContent = "";
+                let base64;
+                try {
+                    base64 = await fileToBase64(file);
+                } catch (err) {
+                    statusEl.classList.add("hidden");
+                    alert("Failed to read file: " + (err.message || "Unknown error"));
+                    return;
+                }
                 try {
                     const res = await fetch(endpoint, {
                         method: "POST",
@@ -644,11 +770,25 @@
                     });
                     const data = await res.json().catch(() => ({}));
                     if (!res.ok) throw new Error(data.error || res.statusText);
+                    msgEl.textContent = "Syncing tables…";
+                    const syncRes = await fetch("/api/sync", { method: "POST" });
+                    const syncData = await syncRes.json().catch(() => ({}));
+                    if (!syncRes.ok) {
+                        msgEl.textContent = "Saved. Upload both files to sync tables.";
+                    } else {
+                        msgEl.textContent = "Finished.";
+                    }
+                    statusEl.classList.add("success");
                     nameEl.textContent = file.name + " ✓";
                     loadConfigPage();
+                    setTimeout(() => {
+                        statusEl.classList.add("hidden");
+                        statusEl.classList.remove("success");
+                    }, 2500);
                 } catch (err) {
+                    statusEl.classList.add("hidden");
                     nameEl.textContent = "";
-                    alert("Upload failed: " + (err.message || "Unknown error"));
+                    alert("Failed: " + (err.message || "Unknown error"));
                 }
             }
 
