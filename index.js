@@ -4,6 +4,7 @@ const path = require("path");
 const { decodePzBuffer } = require("./lib/decode-pz-buffer");
 const config = require("./config");
 const runtimeConfig = require("./lib/runtime-config");
+const cacheDb = require("./lib/cache-db");
 
 const app = express();
 const port = config.port;
@@ -69,7 +70,10 @@ function reconnectDbs() {
     closeVehiclesDb();
     closePlayersDb();
     const paths = getPaths();
-    if (paths) vehiclesDb = openVehiclesDb();
+    if (paths) {
+        vehiclesDb = openVehiclesDb();
+        playersDb = openPlayersDb();
+    }
 }
 
 // No DB at startup; connections are opened when config exists and API is used
@@ -146,120 +150,64 @@ app.put("/api/config", (req, res) => {
             playersDbPath: body.playersDbPath,
         });
         reconnectDbs();
-        res.json(runtimeConfig.getConfigForApi());
+        const paths = getPaths();
+        if (!paths || !vehiclesDb) {
+            cacheDb.clearCache(() => res.json(runtimeConfig.getConfigForApi()));
+            return;
+        }
+        cacheDb.syncVehicles(vehiclesDb, decodePzBuffer, (err) => {
+            if (err) {
+                return res.status(500).json({ error: err.message });
+            }
+            if (!playersDb) {
+                return res.json(runtimeConfig.getConfigForApi());
+            }
+            discoverPlayersTable()
+                .then(() => {
+                    cacheDb.syncPlayers(playersDb, playersTableName, playersColumns, decodePzBuffer, (err2) => {
+                        if (err2) return res.status(500).json({ error: err2.message });
+                        res.json(runtimeConfig.getConfigForApi());
+                    });
+                })
+                .catch((e) => res.status(500).json({ error: e.message }));
+        });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
 
-// --- API: Vehicles ---
+// --- API: Vehicles (from cache; no decode on request) ---
 app.get("/api/vehicles", (req, res) => {
-    if (!getPaths()) return res.json([]);
-    if (!vehiclesDb) vehiclesDb = openVehiclesDb();
-    if (!vehiclesDb) return res.json([]);
-    const sql = "SELECT id, x, y, data FROM vehicles";
-    vehiclesDb.all(sql, [], (err, rows) => {
-        if (err) {
-            res.json([]);
-            return;
-        }
-        const list = (rows || []).map((row) => {
-            const decoded = decodePzBuffer(row.data, "vehicle");
-            return {
-                id: row.id,
-                x: row.x != null ? Math.round(Number(row.x)) : null,
-                y: row.y != null ? Math.round(Number(row.y)) : null,
-                type: decoded.extracted.vehicleType || "Unknown",
-                partCount: (decoded.extracted.partNames || []).length,
-            };
-        });
-        res.json(list);
+    cacheDb.getVehicles((err, list) => {
+        if (err) return res.json([]);
+        res.json(list || []);
     });
 });
 
 app.get("/api/vehicles/:id", (req, res) => {
-    if (!getPaths() || !vehiclesDb) {
-        if (!vehiclesDb && getPaths()) vehiclesDb = openVehiclesDb();
-        if (!vehiclesDb) return res.status(404).json({ error: "Vehicle not found" });
-    }
     const id = req.params.id;
-    vehiclesDb.get("SELECT id, x, y, data FROM vehicles WHERE id = ?", [id], (err, row) => {
-        if (err) return res.status(404).json({ error: "Vehicle not found" });
+    cacheDb.getVehicleById(id, (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
         if (!row) return res.status(404).json({ error: "Vehicle not found" });
-        const decoded = decodePzBuffer(row.data, "vehicle");
-        res.json({
-            id: row.id,
-            x: row.x != null ? Math.round(Number(row.x)) : null,
-            y: row.y != null ? Math.round(Number(row.y)) : null,
-            extracted: decoded.extracted,
-            raw: decoded.raw,
-        });
+        res.json(row);
     });
 });
 
-// --- API: Players ---
+// --- API: Players (from cache; no decode on request) ---
 app.get("/api/players", (req, res) => {
-    if (!getPaths()) return res.json([]);
-    ensurePlayersDb()
-        .then(() => discoverPlayersTable())
-        .then(() => {
-            const cols = ["id", "data"];
-            if (playersColumns.includes("x")) cols.push("x");
-            if (playersColumns.includes("y")) cols.push("y");
-            if (playersColumns.includes("z")) cols.push("z");
-            const sql = `SELECT ${cols.join(", ")} FROM ${playersTableName}`;
-            playersDb.all(sql, [], (err, rows) => {
-                if (err) {
-                    res.json([]);
-                    return;
-                }
-                const list = (rows || []).map((row) => {
-                    const decoded = decodePzBuffer(row.data, "player");
-                    const names = decoded.extracted.characterNames || [];
-                    const professions = decoded.extracted.professionIds || [];
-                    const x = row.x != null ? Math.round(Number(row.x)) : null;
-                    const y = row.y != null ? Math.round(Number(row.y)) : null;
-                    return {
-                        id: row.id,
-                        name: names[0] || `Player ${row.id}`,
-                        profession: professions[0] || null,
-                        x,
-                        y,
-                        z: row.z != null ? Number(row.z) : null,
-                    };
-                });
-                res.json(list);
-            });
-        })
-        .catch(() => res.json([]));
+    cacheDb.getPlayers((err, list) => {
+        if (err) return res.json([]);
+        res.json(list || []);
+    });
 });
 
 app.get("/api/players/:id", (req, res) => {
-    if (!getPaths()) return res.status(404).json({ error: "Player not found" });
-    ensurePlayersDb()
-        .then(() => discoverPlayersTable())
-        .then(() => {
-            const id = req.params.id;
-            const cols = ["id", "data"];
-            if (playersColumns.includes("x")) cols.push("x");
-            if (playersColumns.includes("y")) cols.push("y");
-            if (playersColumns.includes("z")) cols.push("z");
-            const sql = `SELECT ${cols.join(", ")} FROM ${playersTableName} WHERE id = ?`;
-            playersDb.get(sql, [id], (err, row) => {
-                if (err) return res.status(404).json({ error: "Player not found" });
-                if (!row) return res.status(404).json({ error: "Player not found" });
-                const decoded = decodePzBuffer(row.data, "player");
-                res.json({
-                    id: row.id,
-                    x: row.x != null ? Math.round(Number(row.x)) : null,
-                    y: row.y != null ? Math.round(Number(row.y)) : null,
-                    z: row.z != null ? Number(row.z) : null,
-                    extracted: decoded.extracted,
-                    raw: decoded.raw,
-                });
-            });
-        })
-        .catch(() => res.status(404).json({ error: "Player not found" }));
+    const id = req.params.id;
+    cacheDb.getPlayerById(id, (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!row) return res.status(404).json({ error: "Player not found" });
+        res.json(row);
+    });
 });
 
 // SPA fallback: serve index.html for non-API routes
