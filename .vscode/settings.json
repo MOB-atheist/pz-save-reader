@@ -1,0 +1,32 @@
+{
+    "typescript.tsdk": "node_modules\\typescript\\lib",
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true,
+    "files.autoSave": "onFocusChange",
+    "editor.codeActionsOnSave": {
+        "source.organizeImports": "explicit",
+        "source.fixAll": "explicit",
+        "source.fixAll.eslint": "explicit"
+    },
+    "typescript.updateImportsOnFileMove.enabled": "always",
+    "javascript.updateImportsOnFileMove.enabled": "always",
+    "editor.showUnused": true,
+    "workbench.colorCustomizations": {
+        "editorUnnecessaryCode.border": "#a2002b"
+    },
+    "jest.runMode": "on-demand",
+    "sqltools.connections": [
+        {
+            "previewLimit": 50,
+            "driver": "SQLite",
+            "database": "C:\\Users\\pablo\\Zomboid\\Saves\\Multiplayer\\servertest\\vehicles.db",
+            "name": "vehicles"
+        },
+        {
+            "previewLimit": 50,
+            "driver": "SQLite",
+            "database": "C:\\Users\\pablo\\Zomboid\\Saves\\Multiplayer\\servertest\\players.db",
+            "name": "player"
+        }
+    ]
+}

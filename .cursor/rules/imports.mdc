@@ -1,0 +1,81 @@
+---
+description: 
+globs: src/**/*.ts,src/**/*.tsx
+alwaysApply: false
+---
+# Import Path Guidelines
+
+## Next.js App Directory Imports
+
+- **Always use the correct base path for imports**
+  - ✅ DO: Use `@/app/...` for files inside the app directory
+  ```typescript
+  import { TaskFormValues } from "@/app/types/form";
+  ```
+  - ❌ DON'T: Use incorrect base paths
+  ```typescript
+  // Wrong - this won't work in app directory
+  import { TaskFormValues } from "@/types/form";
+  ```
+
+## shadcn/ui Component Imports
+
+- **Always import shadcn components from root level**
+  - ✅ DO: Use `@/components/ui/...` for shadcn components
+  ```typescript
+  import { Button } from "@/components/ui/button";
+  import { Form } from "@/components/ui/form";
+  ```
+  - ❌ DON'T: Import from app directory
+  ```typescript
+  // Wrong - shadcn components are installed at root level
+  import { Button } from "@/app/components/ui/button";
+  ```
+
+- **Check existing file structure before creating new paths**
+  - Always search for existing files before creating new ones
+  - Use `file_search` or `list_dir` to verify file locations
+  - Pay attention to error messages about missing modules - they often indicate wrong paths
+
+## Module Resolution
+
+- **Handle circular dependencies**
+  - Move shared types to a dedicated types directory
+  - Use relative imports for closely related files
+  - Consider creating a barrel file (index.ts) for commonly used types
+
+- **Type imports**
+  - Use `type` imports for type-only imports
+  ```typescript
+  import type { TaskFormValues } from "@/app/types/form";
+  ```
+  - Keep type definitions close to their primary usage
+
+## Best Practices
+
+- **Verify import paths work**
+  - Test imports after adding new files
+  - Check TypeScript errors for path issues
+  - Use consistent import patterns within a directory
+
+- **Module organization**
+  - Keep related functionality together
+  - Use barrel files for complex modules
+  - Document module structure in comments
+
+## Common Pitfalls
+
+1. **Wrong base path in app directory**
+   - Remember that `@/` maps to the root, so app directory files need `@/app/`
+   - Check existing imports in the file for the correct pattern
+   - Exception: shadcn components are always at root level (`@/components/ui/...`)
+
+2. **Circular dependencies**
+   - Watch for type imports creating cycles
+   - Move shared types to a common location
+   - Use interface merging when appropriate
+
+3. **Missing type declarations**
+   - Ensure types are exported properly
+   - Check file extensions (.ts vs .tsx)
+   - Verify tsconfig.json paths 

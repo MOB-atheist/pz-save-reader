@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>PZ Manager</title>
+        <style>
+            * {
+                box-sizing: border-box;
+            }
+            body {
+                font-family: "Segoe UI", sans-serif;
+                background: #1a1a1a;
+                color: #eee;
+                margin: 0;
+                padding: 0;
+            }
+            .nav {
+                background: #252525;
+                padding: 12px 20px;
+                border-bottom: 1px solid #333;
+                display: flex;
+                gap: 16px;
+                align-items: center;
+            }
+            .nav a {
+                color: #00a8ff;
+                text-decoration: none;
+                font-weight: 500;
+            }
+            .nav a:hover {
+                text-decoration: underline;
+            }
+            .nav a.active {
+                color: #fff;
+            }
+            .page {
+                padding: 20px;
+                max-width: 1200px;
+                margin: 0 auto;
+            }
+            .page.hidden {
+                display: none;
+            }
+            h1 {
+                margin-top: 0;
+                font-size: 1.5rem;
+            }
+            input[type="text"] {
+                padding: 12px;
+                width: 100%;
+                max-width: 400px;
+                margin-bottom: 20px;
+                background: #333;
+                border: 1px solid #555;
+                color: #eee;
+                border-radius: 4px;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            th,
+            td {
+                padding: 12px;
+                text-align: left;
+                border-bottom: 1px solid #333;
+            }
+            th {
+                background: #252525;
+                font-weight: 600;
+            }
+            tr:hover {
+                background: #252525;
+            }
+            tr.clickable {
+                cursor: pointer;
+            }
+            .btn-map {
+                color: #00a8ff;
+                text-decoration: none;
+                font-weight: bold;
+            }
+            .btn-map:hover {
+                text-decoration: underline;
+            }
+            .type-tag {
+                background: #444;
+                padding: 4px 8px;
+                border-radius: 4px;
+                font-size: 0.9em;
+            }
+            .btn-details {
+                background: #444;
+                color: #eee;
+                border: none;
+                padding: 6px 12px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 0.9em;
+            }
+            .btn-details:hover {
+                background: #555;
+            }
+
+            /* Modal */
+            .modal-overlay {
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.7);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 1000;
+                padding: 20px;
+            }
+            .modal-overlay.hidden {
+                display: none;
+            }
+            .modal {
+                background: #252525;
+                border: 1px solid #444;
+                border-radius: 8px;
+                max-width: 90vw;
+                max-height: 85vh;
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
+            }
+            .modal-header {
+                padding: 16px 20px;
+                border-bottom: 1px solid #333;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            .modal-header h2 {
+                margin: 0;
+                font-size: 1.25rem;
+            }
+            .modal-close {
+                background: transparent;
+                border: none;
+                color: #aaa;
+                font-size: 1.5rem;
+                cursor: pointer;
+                line-height: 1;
+                padding: 0 4px;
+            }
+            .modal-close:hover {
+                color: #fff;
+            }
+            .modal-body {
+                padding: 20px;
+                overflow-y: auto;
+                flex: 1;
+            }
+            .detail-section {
+                margin-bottom: 20px;
+            }
+            .detail-section h3 {
+                margin: 0 0 8px 0;
+                font-size: 0.95rem;
+                color: #aaa;
+            }
+            .detail-section pre,
+            .detail-section ul {
+                margin: 0;
+                font-size: 0.9rem;
+                background: #1a1a1a;
+                padding: 12px;
+                border-radius: 4px;
+                overflow-x: auto;
+            }
+            .detail-section ul {
+                list-style: none;
+                padding-left: 12px;
+            }
+            .detail-section li {
+                padding: 2px 0;
+            }
+            .raw-toggle {
+                background: #333;
+                border: 1px solid #555;
+                color: #eee;
+                padding: 8px 12px;
+                border-radius: 4px;
+                cursor: pointer;
+                margin-bottom: 8px;
+                font-size: 0.9rem;
+            }
+            .raw-toggle:hover {
+                background: #444;
+            }
+            .raw-content {
+                font-size: 0.75rem;
+                word-break: break-all;
+                max-height: 200px;
+                overflow-y: auto;
+            }
+            .loading {
+                color: #888;
+            }
+            .error {
+                color: #e66;
+            }
+        </style>
+    </head>
+    <body>
+        <nav class="nav">
+            <a href="#/vehicles" id="nav-vehicles">Vehicles</a>
+            <a href="#/players" id="nav-players">Players</a>
+        </nav>
+
+        <main id="app">
+            <div id="page-vehicles" class="page">
+                <h1>Vehicles</h1>
+                <input type="text" id="search-vehicles" placeholder="Filter by type (e.g. Trailer, Ambulance)..." />
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Vehicle Type</th>
+                            <th>X</th>
+                            <th>Y</th>
+                            <th>Map</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="vehicle-list"></tbody>
+                </table>
+            </div>
+            <div id="page-players" class="page hidden">
+                <h1>Players</h1>
+                <input type="text" id="search-players" placeholder="Filter by name or profession..." />
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Profession</th>
+                            <th>Position (X, Y)</th>
+                            <th>Map</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="player-list"></tbody>
+                </table>
+            </div>
+        </main>
+
+        <div id="modal-overlay" class="modal-overlay hidden">
+            <div class="modal">
+                <div class="modal-header">
+                    <h2 id="modal-title">Details</h2>
+                    <button type="button" class="modal-close" id="modal-close" aria-label="Close">&times;</button>
+                </div>
+                <div class="modal-body" id="modal-body"></div>
+            </div>
+        </div>
+
+        <script>
+            const $ = (id) => document.getElementById(id);
+            let allVehicles = [];
+            let allPlayers = [];
+
+            // Routing
+            function showPage(page) {
+                document.querySelectorAll(".page").forEach((p) => p.classList.add("hidden"));
+                const el = page === "vehicles" ? $("page-vehicles") : $("page-players");
+                if (el) el.classList.remove("hidden");
+                $("nav-vehicles").classList.toggle("active", page === "vehicles");
+                $("nav-players").classList.toggle("active", page === "players");
+                if (page === "vehicles" && allVehicles.length === 0) loadVehicles();
+                if (page === "players" && allPlayers.length === 0) loadPlayers();
+            }
+
+            window.addEventListener("hashchange", () => {
+                const hash = (window.location.hash || "#/vehicles").slice(1);
+                if (hash === "/players") showPage("players");
+                else showPage("vehicles");
+            });
+            if (window.location.hash === "#/players") showPage("players");
+            else showPage("vehicles");
+
+            // Vehicles
+            async function loadVehicles() {
+                try {
+                    const res = await fetch("/api/vehicles");
+                    if (!res.ok) throw new Error(res.statusText);
+                    allVehicles = await res.json();
+                    renderVehicles(allVehicles);
+                } catch (e) {
+                    $("vehicle-list").innerHTML = '<tr><td colspan="6" class="error">Failed to load: ' + e.message + "</td></tr>";
+                }
+            }
+
+            function renderVehicles(data) {
+                const list = $("vehicle-list");
+                list.innerHTML = data
+                    .map(
+                        (v) => `
+                    <tr class="clickable" data-id="${v.id}" data-type="vehicle">
+                        <td>${v.id}</td>
+                        <td><span class="type-tag">${escapeHtml(v.type)}</span></td>
+                        <td>${v.x != null ? v.x : "—"}</td>
+                        <td>${v.y != null ? v.y : "—"}</td>
+                        <td>${v.x != null && v.y != null ? '<a class="btn-map" href="https://map.projectzomboid.com/#' + v.x + 'x' + v.y + '" target="_blank">Open Map</a>' : "—"}</td>
+                        <td><button type="button" class="btn-details" data-id="${v.id}" data-type="vehicle">Details</button></td>
+                    </tr>
+                `
+                    )
+                    .join("");
+            }
+
+            $("search-vehicles").addEventListener("input", (e) => {
+                const term = e.target.value.toLowerCase();
+                const filtered = allVehicles.filter((v) => v.type.toLowerCase().includes(term));
+                renderVehicles(filtered);
+            });
+
+            // Players
+            async function loadPlayers() {
+                try {
+                    const res = await fetch("/api/players");
+                    if (!res.ok) throw new Error(res.statusText);
+                    allPlayers = await res.json();
+                    renderPlayers(allPlayers);
+                } catch (e) {
+                    $("player-list").innerHTML = '<tr><td colspan="6" class="error">Failed to load: ' + e.message + "</td></tr>";
+                }
+            }
+
+            function renderPlayers(data) {
+                const list = $("player-list");
+                list.innerHTML = data
+                    .map(
+                        (p) => `
+                    <tr class="clickable" data-id="${p.id}" data-type="player">
+                        <td>${p.id}</td>
+                        <td>${escapeHtml(p.name)}</td>
+                        <td>${escapeHtml(p.profession || "—")}</td>
+                        <td>${p.x != null && p.y != null ? p.x + ", " + p.y : "—"}</td>
+                        <td>${p.x != null && p.y != null ? '<a class="btn-map" href="https://map.projectzomboid.com/#' + p.x + 'x' + p.y + '" target="_blank">Open Map</a>' : "—"}</td>
+                        <td><button type="button" class="btn-details" data-id="${p.id}" data-type="player">Details</button></td>
+                    </tr>
+                `
+                    )
+                    .join("");
+            }
+
+            $("search-players").addEventListener("input", (e) => {
+                const term = e.target.value.toLowerCase();
+                const filtered = allPlayers.filter(
+                    (p) =>
+                        (p.name && p.name.toLowerCase().includes(term)) ||
+                        (p.profession && p.profession.toLowerCase().includes(term))
+                );
+                renderPlayers(filtered);
+            });
+
+            // Modal
+            const overlay = $("modal-overlay");
+            const modalBody = $("modal-body");
+            const modalTitle = $("modal-title");
+
+            function openModal(type, id) {
+                modalTitle.textContent = type === "vehicle" ? "Vehicle " + id : "Player " + id;
+                modalBody.innerHTML = '<p class="loading">Loading…</p>';
+                overlay.classList.remove("hidden");
+
+                const url = type === "vehicle" ? "/api/vehicles/" + id : "/api/players/" + id;
+                fetch(url)
+                    .then((r) => {
+                        if (!r.ok) throw new Error(r.statusText);
+                        return r.json();
+                    })
+                    .then((data) => {
+                        if (type === "vehicle") {
+                            modalBody.innerHTML = renderVehicleDetail(data);
+                        } else {
+                            modalBody.innerHTML = renderPlayerDetail(data);
+                        }
+                        bindRawToggle();
+                    })
+                    .catch((e) => {
+                        modalBody.innerHTML = '<p class="error">Failed to load: ' + escapeHtml(e.message) + "</p>";
+                    });
+            }
+
+            function renderVehicleDetail(data) {
+                const e = data.extracted || {};
+                let html = "";
+                html += '<div class="detail-section"><h3>Summary</h3><ul>';
+                html += "<li><strong>ID</strong>: " + data.id + "</li>";
+                html += "<li><strong>Position</strong>: " + (data.x != null ? data.x : "—") + ", " + (data.y != null ? data.y : "—") + "</li>";
+                html += "<li><strong>Vehicle type</strong>: " + escapeHtml(e.vehicleType || "—") + "</li>";
+                if (e.partNames && e.partNames.length) {
+                    html += "<li><strong>Parts</strong>: " + escapeHtml(e.partNames.join(", ")) + "</li>";
+                }
+                if (e.customNames && e.customNames.length) {
+                    html += "<li><strong>Custom names</strong>: " + escapeHtml(e.customNames.join(", ")) + "</li>";
+                }
+                html += "</ul></div>";
+                html += '<div class="detail-section"><button type="button" class="raw-toggle">Show raw buffer</button><pre class="raw-content hidden" id="raw-content"></pre></div>';
+                window._modalRaw = data.raw || [];
+                return html;
+            }
+
+            function renderPlayerDetail(data) {
+                const e = data.extracted || {};
+                let html = "";
+                html += '<div class="detail-section"><h3>Summary</h3><ul>';
+                html += "<li><strong>ID</strong>: " + data.id + "</li>";
+                html += "<li><strong>Position</strong>: " + (data.x != null ? data.x : "—") + ", " + (data.y != null ? data.y : "—") + (data.z != null ? ", " + data.z : "") + "</li>";
+                if (e.characterNames && e.characterNames.length) {
+                    html += "<li><strong>Names</strong>: " + escapeHtml(e.characterNames.join(", ")) + "</li>";
+                }
+                if (e.professionIds && e.professionIds.length) {
+                    html += "<li><strong>Profession(s)</strong>: " + escapeHtml(e.professionIds.join(", ")) + "</li>";
+                }
+                if (e.traitOrSkillIds && e.traitOrSkillIds.length) {
+                    html += "<li><strong>Traits / skills</strong>: " + escapeHtml(e.traitOrSkillIds.slice(0, 15).join(", ")) + (e.traitOrSkillIds.length > 15 ? " …" : "") + "</li>";
+                }
+                if (e.statNames && e.statNames.length) {
+                    html += "<li><strong>Stats</strong>: " + escapeHtml(e.statNames.join(", ")) + "</li>";
+                }
+                html += "</ul></div>";
+                html += '<div class="detail-section"><button type="button" class="raw-toggle">Show raw buffer</button><pre class="raw-content hidden" id="raw-content"></pre></div>';
+                window._modalRaw = data.raw || [];
+                return html;
+            }
+
+            function bindRawToggle() {
+                const rawPre = document.getElementById("raw-content");
+                const rawData = window._modalRaw;
+                if (!rawPre || !Array.isArray(rawData)) return;
+                const toggle = modalBody.querySelector(".raw-toggle");
+                if (toggle) {
+                    toggle.textContent = "Show raw buffer";
+                    toggle.onclick = () => {
+                        if (rawPre.classList.contains("hidden")) {
+                            rawPre.textContent = rawData.join(", ");
+                            rawPre.classList.remove("hidden");
+                            toggle.textContent = "Hide raw buffer";
+                        } else {
+                            rawPre.classList.add("hidden");
+                            toggle.textContent = "Show raw buffer";
+                        }
+                    };
+                }
+            }
+
+            function closeModal() {
+                overlay.classList.add("hidden");
+            }
+
+            $("modal-close").addEventListener("click", closeModal);
+            overlay.addEventListener("click", (ev) => {
+                if (ev.target === overlay) closeModal();
+            });
+
+            document.addEventListener("click", (ev) => {
+                const btn = ev.target.closest(".btn-details");
+                const row = ev.target.closest("tr.clickable");
+                if (btn) {
+                    ev.preventDefault();
+                    openModal(btn.dataset.type, btn.dataset.id);
+                } else if (row && !ev.target.closest("a")) {
+                    ev.preventDefault();
+                    openModal(row.dataset.type, row.dataset.id);
+                }
+            });
+
+            function escapeHtml(s) {
+                if (s == null) return "";
+                const div = document.createElement("div");
+                div.textContent = s;
+                return div.innerHTML;
+            }
+        </script>
+    </body>
+</html>
