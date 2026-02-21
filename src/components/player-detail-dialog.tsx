@@ -51,6 +51,40 @@ function isLikelyUsername(value: string): boolean {
     );
 }
 
+// PZ occupation IDs only — filter so Profession(s) never shows traits or clothing
+const PZ_PROFESSION_IDS = new Set([
+    "base:unemployed", "base:fireofficer", "base:policeofficer", "base:parkranger",
+    "base:constructionworker", "base:securityguard", "base:carpenter", "base:burglar",
+    "base:chef", "base:diyexpert", "base:rancher", "base:farmer", "base:angler",
+    "base:doctor", "base:veteran", "base:nurse", "base:lumberjack", "base:fitnessinstructor",
+    "base:burgerflipper", "base:electrician", "base:engineer", "base:welder", "base:blacksmith",
+    "base:mechanic", "base:tailor", "base:repairman", "base:salesman",
+]);
+// Exclude from Traits so we don't show clothing/slots as traits
+const PZ_CLOTHING_SLOT_IDS = new Set([
+    "base:belt", "base:mask", "base:hat", "base:tanktop", "base:tshirt", "base:shortsleeveshirt",
+    "base:necklace", "base:socks", "base:shoes", "base:glasses", "base:gloves", "base:scarf",
+    "base:bag", "base:jacket", "base:vest", "base:pants", "base:shorts", "base:underwear",
+    "base:ring", "base:watch",
+]);
+
+function displayProfessions(professionIds: string[] | undefined): string[] {
+    if (!professionIds?.length) return [];
+    return professionIds.filter((id) =>
+        PZ_PROFESSION_IDS.has(id.toLowerCase()),
+    );
+}
+
+function displayTraits(traitOrSkillIds: string[] | undefined): string[] {
+    if (!traitOrSkillIds?.length) return [];
+    return traitOrSkillIds.filter(
+        (id) =>
+            id.startsWith("base:") &&
+            !PZ_PROFESSION_IDS.has(id.toLowerCase()) &&
+            !PZ_CLOTHING_SLOT_IDS.has(id.toLowerCase()),
+    );
+}
+
 type Props = {
     id: number | string | null;
     open: boolean;
@@ -84,6 +118,8 @@ export function PlayerDetailDialog({ id, open, onOpenChange }: Props) {
 
     const e = data?.extracted ?? {};
     const raw = data?.raw ?? [];
+    const professionsDisplay = displayProfessions(e.professionIds);
+    const traitsDisplay = displayTraits(e.traitOrSkillIds);
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -143,19 +179,19 @@ export function PlayerDetailDialog({ id, open, onOpenChange }: Props) {
                                             {e.characterNames.join(", ")}
                                         </li>
                                     ) : null}
-                                    {e.professionIds?.length ? (
+                                    {professionsDisplay.length ? (
                                         <li>
                                             <strong>Profession(s)</strong>:{" "}
-                                            {e.professionIds.join(", ")}
+                                            {professionsDisplay.join(", ")}
                                         </li>
                                     ) : null}
-                                    {e.traitOrSkillIds?.length ? (
+                                    {traitsDisplay.length ? (
                                         <li>
                                             <strong>Traits</strong>:{" "}
-                                            {e.traitOrSkillIds
+                                            {traitsDisplay
                                                 .slice(0, 20)
                                                 .join(", ")}
-                                            {e.traitOrSkillIds.length > 20
+                                            {traitsDisplay.length > 20
                                                 ? " …"
                                                 : ""}
                                         </li>
