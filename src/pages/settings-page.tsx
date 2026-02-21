@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2 } from "lucide-react";
 import {
   getConfig,
@@ -210,11 +211,13 @@ export function SettingsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold mb-4">Global configuration</h1>
-      <p className="text-muted-foreground mb-5">
-        Choose your Project Zomboid save files with the file picker, or enter a
-        save folder path below and save.
-      </p>
+      <header className="border-b border-border pb-4 mb-4">
+        <h1 className="text-2xl font-semibold">Global configuration</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Choose your Project Zomboid save files with the file picker, or enter
+          a save folder path below and save.
+        </p>
+      </header>
       {loading ? (
         <p className="text-muted-foreground">Loading…</p>
       ) : (
@@ -335,14 +338,14 @@ export function SettingsPage() {
             <Button type="submit">Save configuration</Button>
           </form>
           {saveStatus === "success" && (
-            <div className="mt-4 p-3 rounded-md bg-green-500/10 text-green-600 dark:text-green-400 text-sm">
-              {saveMessage}
-            </div>
+            <Alert className="mt-4 border-green-500/50 bg-green-500/10 text-green-700 dark:text-green-400 [&>svg]:text-green-600 dark:[&>svg]:text-green-400">
+              <AlertDescription>{saveMessage}</AlertDescription>
+            </Alert>
           )}
           {saveStatus === "error" && (
-            <div className="mt-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">
-              {saveMessage}
-            </div>
+            <Alert variant="destructive" className="mt-4">
+              <AlertDescription>{saveMessage}</AlertDescription>
+            </Alert>
           )}
         </>
       )}

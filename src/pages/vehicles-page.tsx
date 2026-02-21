@@ -1,4 +1,5 @@
 import { useMemo, useState, useCallback } from "react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -9,6 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { VehicleDetailDialog } from "@/components/vehicle-detail-dialog";
 import { useRefresh } from "@/contexts/refresh-context";
 import { getVehicles, type VehicleRow } from "@/lib/api-client";
@@ -61,44 +63,53 @@ export function VehiclesPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold mb-4">Vehicles</h1>
-      <Input
-        placeholder="Filter by type (e.g. Trailer, Ambulance)..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="max-w-md mb-4"
-      />
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
-        <span className="text-sm text-muted-foreground">Export filtered:</span>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={isEmpty}
-          onClick={() =>
-            exportCsv(exportRows, ["id", "type", "x", "y", "mapUrl"], "vehicles.csv")
-          }
-        >
-          CSV
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={isEmpty}
-          onClick={() => exportExcel(exportRows, "Vehicles", "vehicles.xlsx")}
-        >
-          Excel
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={isEmpty}
-          onClick={() => exportJson(exportRows, "vehicles.json")}
-        >
-          JSON
-        </Button>
-        {isEmpty && (
-          <span className="text-sm text-muted-foreground">No rows to export.</span>
-        )}
+      <header className="border-b border-border pb-4 mb-4">
+        <h1 className="text-2xl font-semibold">Vehicles</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Browse and export vehicle data from your save.
+        </p>
+      </header>
+      <div className="rounded-lg border border-border bg-muted/30 p-3 mb-4 space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            placeholder="Filter by type (e.g. Trailer, Ambulance)..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="max-w-md"
+          />
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm text-muted-foreground">Export filtered:</span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={isEmpty}
+            onClick={() =>
+              exportCsv(exportRows, ["id", "type", "x", "y", "mapUrl"], "vehicles.csv")
+            }
+          >
+            CSV
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={isEmpty}
+            onClick={() => exportExcel(exportRows, "Vehicles", "vehicles.xlsx")}
+          >
+            Excel
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={isEmpty}
+            onClick={() => exportJson(exportRows, "vehicles.json")}
+          >
+            JSON
+          </Button>
+          {isEmpty && (
+            <span className="text-sm text-muted-foreground">No rows to export.</span>
+          )}
+        </div>
       </div>
       {loading && <p className="text-muted-foreground">Loading…</p>}
       {error && (
@@ -117,17 +128,18 @@ export function VehiclesPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.map((v) => (
+            {filtered.map((v, index) => (
               <TableRow
                 key={v.id}
-                className="cursor-pointer"
+                className={cn(
+                  "cursor-pointer",
+                  index % 2 === 0 ? "bg-muted/20" : undefined
+                )}
                 onClick={() => openDetail(v.id)}
               >
                 <TableCell>{v.id}</TableCell>
                 <TableCell>
-                  <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-sm">
-                    {v.type}
-                  </span>
+                  <Badge variant="secondary">{v.type}</Badge>
                 </TableCell>
                 <TableCell>{v.x ?? "—"}</TableCell>
                 <TableCell>{v.y ?? "—"}</TableCell>

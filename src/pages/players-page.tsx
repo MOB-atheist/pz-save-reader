@@ -1,4 +1,5 @@
 import { useMemo, useState, useCallback } from "react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -17,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { MultiSelect } from "@/components/ui/multi-select";
 import { PlayerDetailDialog } from "@/components/player-detail-dialog";
 import { useRefresh } from "@/contexts/refresh-context";
 import { getPlayers, type PlayerRow } from "@/lib/api-client";
@@ -127,128 +130,93 @@ export function PlayersPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold mb-4">Players</h1>
-      <div className="flex flex-wrap items-center gap-3 mb-4">
-        <Input
-          placeholder="Filter by name, username or profession..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="max-w-[280px]"
-        />
-        <div className="flex items-center gap-2">
-          <Label htmlFor="filter-profession" className="text-sm text-muted-foreground">
-            Profession
-          </Label>
-          <Select value={profession || "all"} onValueChange={(v) => setProfession(v === "all" ? "" : v)}>
-            <SelectTrigger id="filter-profession" className="w-[140px]">
-              <SelectValue placeholder="All" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All</SelectItem>
-              {professions.map((p) => (
-                <SelectItem key={p} value={p}>
-                  {p}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex items-center gap-2">
-          <Label htmlFor="filter-traits" className="text-sm text-muted-foreground">
-            Traits (all selected)
-          </Label>
-          <select
+      <header className="border-b border-border pb-4 mb-4">
+        <h1 className="text-2xl font-semibold">Players</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Browse and export player data from your save.
+        </p>
+      </header>
+      <div className="rounded-lg border border-border bg-muted/30 p-3 mb-4 space-y-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <Input
+            placeholder="Filter by name, username or profession..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="max-w-[280px]"
+          />
+          <div className="flex items-center gap-2">
+            <Label htmlFor="filter-profession" className="text-sm text-muted-foreground">
+              Profession
+            </Label>
+            <Select value={profession || "all"} onValueChange={(v) => setProfession(v === "all" ? "" : v)}>
+              <SelectTrigger id="filter-profession" className="w-[140px]">
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                {professions.map((p) => (
+                  <SelectItem key={p} value={p}>
+                    {p}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <MultiSelect
             id="filter-traits"
-            multiple
-            size={3}
-            title="Hold Ctrl/Cmd to select multiple"
-            className="flex h-auto min-h-[80px] w-[160px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            value={selectedTraits}
-            onChange={(e) => {
-              const opts = Array.from(e.target.selectedOptions, (o) => o.value);
-              setSelectedTraits(opts);
-            }}
-          >
-            {traits.length
-              ? traits.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))
-              : ["—"].map((x) => (
-                  <option key={x} value="">
-                    {x}
-                  </option>
-                ))}
-          </select>
-        </div>
-        <div className="flex items-center gap-2">
-          <Label htmlFor="filter-recipes" className="text-sm text-muted-foreground">
-            Recipes (any selected)
-          </Label>
-          <select
+            label="Traits (all)"
+            options={traits}
+            selected={selectedTraits}
+            onSelectionChange={setSelectedTraits}
+            placeholder="All selected"
+          />
+          <MultiSelect
             id="filter-recipes"
-            multiple
-            size={3}
-            title="Hold Ctrl/Cmd to select multiple"
-            className="flex h-auto min-h-[80px] w-[160px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            value={selectedRecipes}
-            onChange={(e) => {
-              const opts = Array.from(e.target.selectedOptions, (o) => o.value);
-              setSelectedRecipes(opts);
-            }}
-          >
-            {recipes.length
-              ? recipes.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))
-              : ["—"].map((x) => (
-                  <option key={x} value="">
-                    {x}
-                  </option>
-                ))}
-          </select>
+            label="Recipes (any)"
+            options={recipes}
+            selected={selectedRecipes}
+            onSelectionChange={setSelectedRecipes}
+            placeholder="Any selected"
+          />
         </div>
-      </div>
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
-        <span className="text-sm text-muted-foreground">Export filtered:</span>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={isEmpty}
-          onClick={() =>
-            exportCsv(
-              exportRows,
-              ["id", "name", "username", "profession", "x", "y", "z", "mapUrl"],
-              "players.csv"
-            )
-          }
-        >
-          CSV
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={isEmpty}
-          onClick={() => exportExcel(exportRows, "Players", "players.xlsx")}
-        >
-          Excel
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={isEmpty}
-          onClick={() => exportJson(exportRows, "players.json")}
-        >
-          JSON
-        </Button>
-        {isEmpty && (
-          <span className="text-sm text-muted-foreground">
-            No rows to export.
-          </span>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm text-muted-foreground">Export filtered:</span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={isEmpty}
+            onClick={() =>
+              exportCsv(
+                exportRows,
+                ["id", "name", "username", "profession", "x", "y", "z", "mapUrl"],
+                "players.csv"
+              )
+            }
+          >
+            CSV
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={isEmpty}
+            onClick={() => exportExcel(exportRows, "Players", "players.xlsx")}
+          >
+            Excel
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={isEmpty}
+            onClick={() => exportJson(exportRows, "players.json")}
+          >
+            JSON
+          </Button>
+          {isEmpty && (
+            <span className="text-sm text-muted-foreground">
+              No rows to export.
+            </span>
+          )}
+        </div>
       </div>
       {loading && <p className="text-muted-foreground">Loading…</p>}
       {error && (
@@ -268,16 +236,25 @@ export function PlayersPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.map((p) => (
+            {filtered.map((p, index) => (
               <TableRow
                 key={p.id}
-                className="cursor-pointer"
+                className={cn(
+                  "cursor-pointer",
+                  index % 2 === 0 ? "bg-muted/20" : undefined
+                )}
                 onClick={() => openDetail(p.id)}
               >
                 <TableCell>{p.id}</TableCell>
                 <TableCell>{p.name ?? "—"}</TableCell>
                 <TableCell>{p.username ?? "—"}</TableCell>
-                <TableCell>{p.profession ?? "—"}</TableCell>
+                <TableCell>
+                  {p.profession ? (
+                    <Badge variant="secondary">{p.profession}</Badge>
+                  ) : (
+                    "—"
+                  )}
+                </TableCell>
                 <TableCell>
                   {p.x != null && p.y != null ? `${p.x}, ${p.y}` : "—"}
                 </TableCell>

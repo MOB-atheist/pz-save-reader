@@ -56,8 +56,8 @@ export function VehicleDetailDialog({ id, open, onOpenChange }: Props) {
           )}
           {data && !loading && !error && (
             <>
-              <section className="mb-5">
-                <h3 className="text-sm font-medium text-muted-foreground mb-2">
+              <section className="mb-5 pl-3 border-l-4 border-primary/30">
+                <h3 className="text-sm font-medium text-foreground mb-2">
                   Summary
                 </h3>
                 <ul className="list-none space-y-1 text-sm bg-muted/50 rounded-md p-3">
@@ -82,7 +82,7 @@ export function VehicleDetailDialog({ id, open, onOpenChange }: Props) {
                   ) : null}
                 </ul>
               </section>
-              <section className="mb-5">
+              <section className="mb-5 pl-3 border-l-4 border-primary/30">
                 <Button
                   type="button"
                   variant="outline"

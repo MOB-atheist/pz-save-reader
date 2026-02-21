@@ -16,14 +16,17 @@ export function AppLayout(_props: { children?: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <nav className="border-b border-border bg-card px-5 py-3 flex items-center gap-4">
+      <nav className="border-b border-border bg-card shadow-sm px-5 py-3 flex items-center gap-6">
+        <span className="font-semibold text-foreground mr-2">PZ Manager</span>
         {nav.map(({ to, label }) => (
           <Link
             key={to}
             to={to}
             className={cn(
-              "font-medium text-primary hover:underline",
-              location.pathname === to && "text-foreground"
+              "font-medium px-3 py-1.5 rounded-md transition-colors",
+              location.pathname === to
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
             )}
           >
             {label}
