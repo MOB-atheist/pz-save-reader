@@ -75,14 +75,21 @@ function displayProfessions(professionIds: string[] | undefined): string[] {
     );
 }
 
-function displayTraits(traitOrSkillIds: string[] | undefined): string[] {
-    if (!traitOrSkillIds?.length) return [];
-    return traitOrSkillIds.filter(
-        (id) =>
-            id.startsWith("base:") &&
-            !PZ_PROFESSION_IDS.has(id.toLowerCase()) &&
-            !PZ_CLOTHING_SLOT_IDS.has(id.toLowerCase()),
+function isTraitId(id: string): boolean {
+    return (
+        id.startsWith("base:") &&
+        !PZ_PROFESSION_IDS.has(id.toLowerCase()) &&
+        !PZ_CLOTHING_SLOT_IDS.has(id.toLowerCase())
     );
+}
+
+function displayTraits(
+    traitOrSkillIds: string[] | undefined,
+    professionIds: string[] | undefined,
+): string[] {
+    const fromTraits = (traitOrSkillIds ?? []).filter(isTraitId);
+    const fromProfessions = (professionIds ?? []).filter(isTraitId);
+    return [...new Set([...fromTraits, ...fromProfessions])];
 }
 
 type Props = {
@@ -119,7 +126,7 @@ export function PlayerDetailDialog({ id, open, onOpenChange }: Props) {
     const e = data?.extracted ?? {};
     const raw = data?.raw ?? [];
     const professionsDisplay = displayProfessions(e.professionIds);
-    const traitsDisplay = displayTraits(e.traitOrSkillIds);
+    const traitsDisplay = displayTraits(e.traitOrSkillIds, e.professionIds);
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
