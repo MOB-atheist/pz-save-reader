@@ -3,6 +3,7 @@
     <head>
         <meta charset="utf-8" />
         <title>PZ Manager</title>
+        <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js" crossorigin="anonymous"></script>
         <style>
             * {
                 box-sizing: border-box;
@@ -262,6 +263,33 @@
                 font-size: 0.9rem;
                 color: #aaa;
             }
+            .export-bar {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                margin-bottom: 20px;
+                flex-wrap: wrap;
+            }
+            .export-bar span {
+                color: #888;
+                font-size: 0.9rem;
+            }
+            .btn-export {
+                background: #444;
+                color: #eee;
+                border: 1px solid #555;
+                padding: 8px 14px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 0.9rem;
+            }
+            .btn-export:hover:not(:disabled) {
+                background: #555;
+            }
+            .btn-export:disabled {
+                opacity: 0.6;
+                cursor: not-allowed;
+            }
         </style>
     </head>
     <body>
@@ -275,6 +303,13 @@
             <div id="page-vehicles" class="page">
                 <h1>Vehicles</h1>
                 <input type="text" id="search-vehicles" placeholder="Filter by type (e.g. Trailer, Ambulance)..." />
+                <div class="export-bar">
+                    <span>Export filtered:</span>
+                    <button type="button" class="btn-export" id="export-vehicles-csv">CSV</button>
+                    <button type="button" class="btn-export" id="export-vehicles-excel">Excel</button>
+                    <button type="button" class="btn-export" id="export-vehicles-json">JSON</button>
+                    <span id="export-vehicles-msg" class="hidden" style="color:#888;"></span>
+                </div>
                 <table>
                     <thead>
                         <tr>
@@ -292,6 +327,13 @@
             <div id="page-players" class="page hidden">
                 <h1>Players</h1>
                 <input type="text" id="search-players" placeholder="Filter by name or profession..." />
+                <div class="export-bar">
+                    <span>Export filtered:</span>
+                    <button type="button" class="btn-export" id="export-players-csv">CSV</button>
+                    <button type="button" class="btn-export" id="export-players-excel">Excel</button>
+                    <button type="button" class="btn-export" id="export-players-json">JSON</button>
+                    <span id="export-players-msg" class="hidden" style="color:#888;"></span>
+                </div>
                 <table>
                     <thead>
                         <tr>
@@ -357,8 +399,14 @@
                 $("nav-vehicles").classList.toggle("active", page === "vehicles");
                 $("nav-players").classList.toggle("active", page === "players");
                 $("nav-settings").classList.toggle("active", page === "settings");
-                if (page === "vehicles" && allVehicles.length === 0) loadVehicles();
-                if (page === "players" && allPlayers.length === 0) loadPlayers();
+                if (page === "vehicles") {
+                    if (allVehicles.length === 0) loadVehicles();
+                    else updateExportVehiclesState();
+                }
+                if (page === "players") {
+                    if (allPlayers.length === 0) loadPlayers();
+                    else updateExportPlayersState();
+                }
                 if (page === "settings") loadConfigPage();
             }
 
@@ -430,6 +478,7 @@
                     if (!res.ok) throw new Error(res.statusText);
                     allVehicles = await res.json();
                     renderVehicles(allVehicles);
+                    updateExportVehiclesState();
                 } catch (e) {
                     $("vehicle-list").innerHTML = '<tr><td colspan="6" class="error">Failed to load: ' + e.message + "</td></tr>";
                 }
@@ -457,7 +506,189 @@
                 const term = e.target.value.toLowerCase();
                 const filtered = allVehicles.filter((v) => v.type.toLowerCase().includes(term));
                 renderVehicles(filtered);
+                updateExportVehiclesState();
             });
+
+            function getFilteredVehicles() {
+                const term = ($("search-vehicles").value || "").trim().toLowerCase();
+                return term ? allVehicles.filter((v) => v.type.toLowerCase().includes(term)) : allVehicles;
+            }
+
+            function getFilteredPlayers() {
+                const term = ($("search-players").value || "").trim().toLowerCase();
+                return term
+                    ? allPlayers.filter(
+                          (p) =>
+                              (p.name && p.name.toLowerCase().includes(term)) ||
+                              (p.profession && p.profession.toLowerCase().includes(term))
+                      )
+                    : allPlayers;
+            }
+
+            function updateExportVehiclesState() {
+                const data = getFilteredVehicles();
+                const empty = !data.length;
+                $("export-vehicles-csv").disabled = empty;
+                $("export-vehicles-excel").disabled = empty;
+                $("export-vehicles-json").disabled = empty;
+                const msg = $("export-vehicles-msg");
+                if (empty) {
+                    msg.textContent = "No rows to export.";
+                    msg.classList.remove("hidden");
+                } else {
+                    msg.textContent = "";
+                    msg.classList.add("hidden");
+                }
+            }
+
+            function updateExportPlayersState() {
+                const data = getFilteredPlayers();
+                const empty = !data.length;
+                $("export-players-csv").disabled = empty;
+                $("export-players-excel").disabled = empty;
+                $("export-players-json").disabled = empty;
+                const msg = $("export-players-msg");
+                if (empty) {
+                    msg.textContent = "No rows to export.";
+                    msg.classList.remove("hidden");
+                } else {
+                    msg.textContent = "";
+                    msg.classList.add("hidden");
+                }
+            }
+
+            function downloadBlob(blob, filename) {
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(blob);
+                a.download = filename;
+                a.click();
+                URL.revokeObjectURL(a.href);
+            }
+
+            function csvEscape(val) {
+                const s = val == null ? "" : String(val);
+                if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+                return s;
+            }
+
+            function exportVehiclesCsv() {
+                const data = getFilteredVehicles();
+                if (!data.length) return;
+                const rows = data.map((v) => ({
+                    id: v.id,
+                    type: v.type,
+                    x: v.x,
+                    y: v.y,
+                    mapUrl: v.x != null && v.y != null ? "https://map.projectzomboid.com/#" + v.x + "x" + v.y : "",
+                }));
+                const headers = ["id", "type", "x", "y", "mapUrl"];
+                const line = (row) => headers.map((h) => csvEscape(row[h])).join(",");
+                const csv = "\uFEFF" + headers.join(",") + "\n" + rows.map(line).join("\n");
+                downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), "vehicles.csv");
+            }
+
+            function exportVehiclesJson() {
+                const data = getFilteredVehicles();
+                if (!data.length) return;
+                const rows = data.map((v) => ({
+                    id: v.id,
+                    type: v.type,
+                    x: v.x,
+                    y: v.y,
+                    mapUrl: v.x != null && v.y != null ? "https://map.projectzomboid.com/#" + v.x + "x" + v.y : "",
+                }));
+                downloadBlob(
+                    new Blob([JSON.stringify(rows, null, 2)], { type: "application/json" }),
+                    "vehicles.json"
+                );
+            }
+
+            function exportVehiclesExcel() {
+                const data = getFilteredVehicles();
+                if (!data.length) return;
+                if (typeof XLSX === "undefined") {
+                    alert("Excel export requires SheetJS. Check your connection.");
+                    return;
+                }
+                const rows = data.map((v) => ({
+                    id: v.id,
+                    type: v.type,
+                    x: v.x,
+                    y: v.y,
+                    mapUrl: v.x != null && v.y != null ? "https://map.projectzomboid.com/#" + v.x + "x" + v.y : "",
+                }));
+                const ws = XLSX.utils.json_to_sheet(rows);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Vehicles");
+                const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+                downloadBlob(new Blob([wbout], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), "vehicles.xlsx");
+            }
+
+            function exportPlayersCsv() {
+                const data = getFilteredPlayers();
+                if (!data.length) return;
+                const rows = data.map((p) => ({
+                    id: p.id,
+                    name: p.name,
+                    profession: p.profession || "",
+                    x: p.x,
+                    y: p.y,
+                    z: p.z,
+                    mapUrl: p.x != null && p.y != null ? "https://map.projectzomboid.com/#" + p.x + "x" + p.y : "",
+                }));
+                const headers = ["id", "name", "profession", "x", "y", "z", "mapUrl"];
+                const line = (row) => headers.map((h) => csvEscape(row[h])).join(",");
+                const csv = "\uFEFF" + headers.join(",") + "\n" + rows.map(line).join("\n");
+                downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), "players.csv");
+            }
+
+            function exportPlayersJson() {
+                const data = getFilteredPlayers();
+                if (!data.length) return;
+                const rows = data.map((p) => ({
+                    id: p.id,
+                    name: p.name,
+                    profession: p.profession || "",
+                    x: p.x,
+                    y: p.y,
+                    z: p.z,
+                    mapUrl: p.x != null && p.y != null ? "https://map.projectzomboid.com/#" + p.x + "x" + p.y : "",
+                }));
+                downloadBlob(
+                    new Blob([JSON.stringify(rows, null, 2)], { type: "application/json" }),
+                    "players.json"
+                );
+            }
+
+            function exportPlayersExcel() {
+                const data = getFilteredPlayers();
+                if (!data.length) return;
+                if (typeof XLSX === "undefined") {
+                    alert("Excel export requires SheetJS. Check your connection.");
+                    return;
+                }
+                const rows = data.map((p) => ({
+                    id: p.id,
+                    name: p.name,
+                    profession: p.profession || "",
+                    x: p.x,
+                    y: p.y,
+                    z: p.z,
+                    mapUrl: p.x != null && p.y != null ? "https://map.projectzomboid.com/#" + p.x + "x" + p.y : "",
+                }));
+                const ws = XLSX.utils.json_to_sheet(rows);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Players");
+                const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+                downloadBlob(new Blob([wbout], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), "players.xlsx");
+            }
+
+            $("export-vehicles-csv").addEventListener("click", exportVehiclesCsv);
+            $("export-vehicles-excel").addEventListener("click", exportVehiclesExcel);
+            $("export-vehicles-json").addEventListener("click", exportVehiclesJson);
+            $("export-players-csv").addEventListener("click", exportPlayersCsv);
+            $("export-players-excel").addEventListener("click", exportPlayersExcel);
+            $("export-players-json").addEventListener("click", exportPlayersJson);
 
             // Players
             async function loadPlayers() {
@@ -466,6 +697,7 @@
                     if (!res.ok) throw new Error(res.statusText);
                     allPlayers = await res.json();
                     renderPlayers(allPlayers);
+                    updateExportPlayersState();
                 } catch (e) {
                     $("player-list").innerHTML = '<tr><td colspan="6" class="error">Failed to load: ' + e.message + "</td></tr>";
                 }
@@ -497,6 +729,7 @@
                         (p.profession && p.profession.toLowerCase().includes(term))
                 );
                 renderPlayers(filtered);
+                updateExportPlayersState();
             });
 
             // Modal
