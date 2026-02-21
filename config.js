@@ -1,4 +1,4 @@
-const path = require("path");
+import path from "node:path";
 
 const defaultSavePath =
     process.platform === "win32"
@@ -7,7 +7,7 @@ const defaultSavePath =
 
 const savePath = process.env.PZ_SAVE_PATH || defaultSavePath;
 
-module.exports = {
+export default {
     vehiclesDbPath: process.env.PZ_VEHICLES_DB || path.join(savePath, "vehicles.db"),
     playersDbPath: process.env.PZ_PLAYERS_DB || path.join(savePath, "players.db"),
     port: parseInt(process.env.PORT || "3000", 10),

@@ -1,12 +1,16 @@
-const express = require("express");
-const sqlite3 = require("sqlite3").verbose();
-const path = require("path");
-const fs = require("fs");
-const os = require("os");
-const { decodePzBuffer } = require("./lib/decode-pz-buffer");
-const config = require("./config");
-const runtimeConfig = require("./lib/runtime-config");
-const cacheDb = require("./lib/cache-db");
+import express from "express";
+import sqlite3Pkg from "sqlite3";
+import path from "node:path";
+import fs from "node:fs";
+import os from "node:os";
+import { fileURLToPath } from "node:url";
+import { decodePzBuffer } from "./lib/decode-pz-buffer.js";
+import config from "./config.js";
+import * as runtimeConfig from "./lib/runtime-config.js";
+import * as cacheDb from "./lib/cache-db.js";
+
+const sqlite3 = sqlite3Pkg.verbose();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 const port = config.port;
@@ -303,16 +307,27 @@ app.get("/api/players/:id", (req, res) => {
 });
 
 // Static files and SPA fallback (after all API routes)
-app.use(express.static(path.join(__dirname, "public")));
-app.get("/vehicles", (req, res) => {
-    res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-app.get("/players", (req, res) => {
-    res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-app.get("/settings", (req, res) => {
-    res.sendFile(path.join(__dirname, "public", "index.html"));
-});
+const distDir = path.join(__dirname, "dist");
+const distExists = fs.existsSync(distDir);
+
+if (distExists) {
+    app.use(express.static(distDir));
+    app.get("/{*path}", (req, res, next) => {
+        if (req.path.startsWith("/api")) return next();
+        res.sendFile(path.join(distDir, "index.html"));
+    });
+} else {
+    app.use(express.static(path.join(__dirname, "public")));
+    app.get("/vehicles", (req, res) => {
+        res.sendFile(path.join(__dirname, "public", "index.html"));
+    });
+    app.get("/players", (req, res) => {
+        res.sendFile(path.join(__dirname, "public", "index.html"));
+    });
+    app.get("/settings", (req, res) => {
+        res.sendFile(path.join(__dirname, "public", "index.html"));
+    });
+}
 
 // Ensure cache DB and tables exist before accepting requests
 cacheDb.ensureReady((err) => {
