@@ -30,11 +30,16 @@ function getPaths() {
 function discoverPlayersTableFromDb(db) {
     return new Promise((resolve, reject) => {
         db.all(
-            "SELECT name FROM sqlite_master WHERE type='table' AND (name='networkPlayers' OR name='localPlayers') ORDER BY name",
+            "SELECT name FROM sqlite_master WHERE type='table' AND (name='networkPlayers' OR name='localPlayers')",
             [],
             (err, rows) => {
                 if (err) return reject(err);
-                const tableName = rows.length ? rows[0].name : "networkPlayers";
+                const names = (rows || []).map((r) => r.name);
+                const tableName = names.includes("networkPlayers")
+                    ? "networkPlayers"
+                    : names.includes("localPlayers")
+                      ? "localPlayers"
+                      : "networkPlayers";
                 db.all(`PRAGMA table_info(${tableName})`, [], (e, cols) => {
                     if (e) return reject(e);
                     resolve({
