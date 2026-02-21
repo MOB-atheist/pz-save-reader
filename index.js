@@ -22,22 +22,23 @@ function getPaths() {
 }
 
 function openVehiclesDb() {
-    const { vehiclesDbPath } = getPaths();
-    return new sqlite3.Database(vehiclesDbPath, (err) => {
+    const paths = getPaths();
+    if (!paths) return null;
+    return new sqlite3.Database(paths.vehiclesDbPath, (err) => {
         if (err) console.error("Error opening vehicles DB:", err.message);
-        else console.log("Connected to vehicles DB:", vehiclesDbPath);
+        else console.log("Connected to vehicles DB:", paths.vehiclesDbPath);
     });
 }
 
 function openPlayersDb() {
-    const { playersDbPath } = getPaths();
-    return new sqlite3.Database(playersDbPath, (err) => {
+    const paths = getPaths();
+    if (!paths) return null;
+    return new sqlite3.Database(paths.playersDbPath, (err) => {
         if (err) {
             console.error("Error opening players DB:", err.message);
-            return null;
+            return;
         }
-        console.log("Connected to players DB:", playersDbPath);
-        return undefined;
+        console.log("Connected to players DB:", paths.playersDbPath);
     });
 }
 
@@ -67,11 +68,11 @@ function closePlayersDb() {
 function reconnectDbs() {
     closeVehiclesDb();
     closePlayersDb();
-    vehiclesDb = openVehiclesDb();
+    const paths = getPaths();
+    if (paths) vehiclesDb = openVehiclesDb();
 }
 
-// Initial connection
-vehiclesDb = openVehiclesDb();
+// No DB at startup; connections are opened when config exists and API is used
 
 function ensurePlayersDb() {
     if (playersDb) return Promise.resolve(undefined);
@@ -153,10 +154,13 @@ app.put("/api/config", (req, res) => {
 
 // --- API: Vehicles ---
 app.get("/api/vehicles", (req, res) => {
+    if (!getPaths()) return res.json([]);
+    if (!vehiclesDb) vehiclesDb = openVehiclesDb();
+    if (!vehiclesDb) return res.json([]);
     const sql = "SELECT id, x, y, data FROM vehicles";
     vehiclesDb.all(sql, [], (err, rows) => {
         if (err) {
-            res.status(500).json({ error: err.message });
+            res.json([]);
             return;
         }
         const list = (rows || []).map((row) => {
@@ -174,16 +178,14 @@ app.get("/api/vehicles", (req, res) => {
 });
 
 app.get("/api/vehicles/:id", (req, res) => {
+    if (!getPaths() || !vehiclesDb) {
+        if (!vehiclesDb && getPaths()) vehiclesDb = openVehiclesDb();
+        if (!vehiclesDb) return res.status(404).json({ error: "Vehicle not found" });
+    }
     const id = req.params.id;
     vehiclesDb.get("SELECT id, x, y, data FROM vehicles WHERE id = ?", [id], (err, row) => {
-        if (err) {
-            res.status(500).json({ error: err.message });
-            return;
-        }
-        if (!row) {
-            res.status(404).json({ error: "Vehicle not found" });
-            return;
-        }
+        if (err) return res.status(404).json({ error: "Vehicle not found" });
+        if (!row) return res.status(404).json({ error: "Vehicle not found" });
         const decoded = decodePzBuffer(row.data, "vehicle");
         res.json({
             id: row.id,
@@ -197,6 +199,7 @@ app.get("/api/vehicles/:id", (req, res) => {
 
 // --- API: Players ---
 app.get("/api/players", (req, res) => {
+    if (!getPaths()) return res.json([]);
     ensurePlayersDb()
         .then(() => discoverPlayersTable())
         .then(() => {
@@ -207,7 +210,7 @@ app.get("/api/players", (req, res) => {
             const sql = `SELECT ${cols.join(", ")} FROM ${playersTableName}`;
             playersDb.all(sql, [], (err, rows) => {
                 if (err) {
-                    res.status(500).json({ error: err.message });
+                    res.json([]);
                     return;
                 }
                 const list = (rows || []).map((row) => {
@@ -228,41 +231,35 @@ app.get("/api/players", (req, res) => {
                 res.json(list);
             });
         })
-        .catch((e) => res.status(500).json({ error: e.message }));
+        .catch(() => res.json([]));
 });
 
 app.get("/api/players/:id", (req, res) => {
-    const id = req.params.id;
+    if (!getPaths()) return res.status(404).json({ error: "Player not found" });
     ensurePlayersDb()
         .then(() => discoverPlayersTable())
         .then(() => {
+            const id = req.params.id;
             const cols = ["id", "data"];
             if (playersColumns.includes("x")) cols.push("x");
             if (playersColumns.includes("y")) cols.push("y");
             if (playersColumns.includes("z")) cols.push("z");
             const sql = `SELECT ${cols.join(", ")} FROM ${playersTableName} WHERE id = ?`;
             playersDb.get(sql, [id], (err, row) => {
-                if (err) {
-                    res.status(500).json({ error: err.message });
-                    return;
-                }
-                if (!row) {
-                    res.status(404).json({ error: "Player not found" });
-                    return;
-                }
+                if (err) return res.status(404).json({ error: "Player not found" });
+                if (!row) return res.status(404).json({ error: "Player not found" });
                 const decoded = decodePzBuffer(row.data, "player");
-                const out = {
+                res.json({
                     id: row.id,
                     x: row.x != null ? Math.round(Number(row.x)) : null,
                     y: row.y != null ? Math.round(Number(row.y)) : null,
                     z: row.z != null ? Number(row.z) : null,
                     extracted: decoded.extracted,
                     raw: decoded.raw,
-                };
-                res.json(out);
+                });
             });
         })
-        .catch((e) => res.status(500).json({ error: e.message }));
+        .catch(() => res.status(404).json({ error: "Player not found" }));
 });
 
 // SPA fallback: serve index.html for non-API routes
