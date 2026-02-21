@@ -274,6 +274,13 @@ app.get("/settings", (req, res) => {
     res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-app.listen(port, () => {
-    console.log(`PZ Manager running at http://localhost:${port}`);
+// Ensure cache DB and tables exist before accepting requests
+cacheDb.ensureReady((err) => {
+    if (err) {
+        console.error("Failed to initialize cache database:", err.message);
+        process.exit(1);
+    }
+    app.listen(port, () => {
+        console.log(`PZ Manager running at http://localhost:${port}`);
+    });
 });
