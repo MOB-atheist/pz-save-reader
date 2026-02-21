@@ -48,8 +48,25 @@
                 background: #555;
             }
             .btn-refresh:disabled {
-                opacity: 0.6;
-                cursor: not-allowed;
+                opacity: 0.8;
+                cursor: wait;
+            }
+            .btn-refresh .refresh-spinner {
+                display: inline-block;
+                width: 14px;
+                height: 14px;
+                margin-right: 6px;
+                vertical-align: middle;
+                border: 2px solid rgba(255,255,255,0.3);
+                border-top-color: #fff;
+                border-radius: 50%;
+                animation: refresh-spin 0.7s linear infinite;
+            }
+            .btn-refresh .refresh-spinner.hidden {
+                display: none;
+            }
+            @keyframes refresh-spin {
+                to { transform: rotate(360deg); }
             }
             .page {
                 padding: 20px;
@@ -388,7 +405,7 @@
             <a href="#/vehicles" id="nav-vehicles">Vehicles</a>
             <a href="#/players" id="nav-players">Players</a>
             <a href="#/settings" id="nav-settings">Settings</a>
-            <button type="button" class="btn-refresh" id="nav-refresh" title="Resync data from game files">Refresh</button>
+            <button type="button" class="btn-refresh" id="nav-refresh" title="Resync data from game files"><span class="refresh-spinner hidden" id="refresh-spinner" aria-hidden="true"></span><span id="refresh-label">Refresh</span></button>
         </nav>
 
         <main id="app">
@@ -542,7 +559,11 @@
             // Refresh: resync from game files, then reload lists
             $("nav-refresh").addEventListener("click", async () => {
                 const btn = $("nav-refresh");
+                const spinner = $("refresh-spinner");
+                const label = $("refresh-label");
                 btn.disabled = true;
+                spinner.classList.remove("hidden");
+                label.textContent = "Syncing…";
                 try {
                     const res = await fetch("/api/sync", { method: "POST" });
                     const text = await res.text();
@@ -555,13 +576,15 @@
                     allPlayers = [];
                     await loadVehicles();
                     await loadPlayers();
-                    btn.disabled = false;
-                    btn.textContent = "Refreshed!";
-                    setTimeout(() => { btn.textContent = "Refresh"; }, 2000);
+                    label.textContent = "Refreshed!";
+                    setTimeout(() => { label.textContent = "Refresh"; }, 2000);
                 } catch (err) {
-                    btn.disabled = false;
-                    btn.textContent = "Refresh";
+                    label.textContent = "Refresh";
                     alert("Refresh failed: " + (err.message || "Unknown error"));
+                } finally {
+                    btn.disabled = false;
+                    spinner.classList.add("hidden");
+                    if (label.textContent !== "Refreshed!") label.textContent = "Refresh";
                 }
             });
 
