@@ -437,6 +437,31 @@
                 opacity: 0.6;
                 cursor: not-allowed;
             }
+            .player-filters {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                margin-bottom: 16px;
+                flex-wrap: wrap;
+            }
+            .player-filters input[type="text"] {
+                margin-bottom: 0;
+                max-width: 280px;
+            }
+            .player-filters label {
+                font-size: 0.9rem;
+                color: #aaa;
+                margin-right: 4px;
+            }
+            .player-filters select {
+                background: #333;
+                border: 1px solid #555;
+                color: #eee;
+                padding: 8px 10px;
+                border-radius: 4px;
+                font-size: 0.9rem;
+                min-width: 120px;
+            }
         </style>
     </head>
     <body>
@@ -474,7 +499,21 @@
             </div>
             <div id="page-players" class="page hidden">
                 <h1>Players</h1>
-                <input type="text" id="search-players" placeholder="Filter by name, username or profession..." />
+                <div class="player-filters">
+                    <input type="text" id="search-players" placeholder="Filter by name, username or profession..." />
+                    <label for="filter-profession">Profession</label>
+                    <select id="filter-profession">
+                        <option value="">All</option>
+                    </select>
+                    <label for="filter-traits">Traits (all selected)</label>
+                    <select id="filter-traits" multiple size="3" title="Hold Ctrl/Cmd to select multiple">
+                        <option value="">—</option>
+                    </select>
+                    <label for="filter-recipes">Recipes (any selected)</label>
+                    <select id="filter-recipes" multiple size="3" title="Hold Ctrl/Cmd to select multiple">
+                        <option value="">—</option>
+                    </select>
+                </div>
                 <div class="export-bar">
                     <span>Export filtered:</span>
                     <button type="button" class="btn-export" id="export-players-csv">CSV</button>
@@ -878,14 +917,35 @@
 
             function getFilteredPlayers() {
                 const term = ($("search-players").value || "").trim().toLowerCase();
-                return term
-                    ? allPlayers.filter(
-                          (p) =>
-                              (p.name && p.name.toLowerCase().includes(term)) ||
-                              (p.username && p.username.toLowerCase().includes(term)) ||
-                              (p.profession && p.profession.toLowerCase().includes(term))
-                      )
-                    : allPlayers;
+                const professionVal = ($("filter-profession") && $("filter-profession").value) || "";
+                const traitsEl = $("filter-traits");
+                const recipesEl = $("filter-recipes");
+                const selectedTraits =
+                    traitsEl && Array.from(traitsEl.selectedOptions).map((o) => o.value).filter(Boolean);
+                const selectedRecipes =
+                    recipesEl && Array.from(recipesEl.selectedOptions).map((o) => o.value).filter(Boolean);
+
+                return allPlayers.filter((p) => {
+                    if (term) {
+                        const match =
+                            (p.name && p.name.toLowerCase().includes(term)) ||
+                            (p.username && p.username.toLowerCase().includes(term)) ||
+                            (p.profession && p.profession.toLowerCase().includes(term));
+                        if (!match) return false;
+                    }
+                    if (professionVal && p.profession !== professionVal) return false;
+                    if (selectedTraits && selectedTraits.length) {
+                        const hasAll = selectedTraits.every((t) => Array.isArray(p.traits) && p.traits.includes(t));
+                        if (!hasAll) return false;
+                    }
+                    if (selectedRecipes && selectedRecipes.length) {
+                        const hasAny =
+                            Array.isArray(p.recipeIds) &&
+                            selectedRecipes.some((r) => p.recipeIds.includes(r));
+                        if (!hasAny) return false;
+                    }
+                    return true;
+                });
             }
 
             function updateExportVehiclesState() {
@@ -1056,14 +1116,54 @@
             $("export-players-excel").addEventListener("click", exportPlayersExcel);
             $("export-players-json").addEventListener("click", exportPlayersJson);
 
+            function updatePlayerFilterOptions() {
+                const professions = [...new Set(allPlayers.map((p) => p.profession).filter(Boolean))].sort();
+                const traits = [...new Set(allPlayers.flatMap((p) => p.traits || []).filter(Boolean))].sort();
+                const recipes = [...new Set(allPlayers.flatMap((p) => p.recipeIds || []).filter(Boolean))].sort();
+
+                const profEl = $("filter-profession");
+                if (profEl) {
+                    const cur = profEl.value;
+                    profEl.innerHTML = '<option value="">All</option>' + professions.map((p) => '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + "</option>").join("");
+                    if (professions.includes(cur)) profEl.value = cur;
+                }
+
+                const traitsEl = $("filter-traits");
+                if (traitsEl) {
+                    const cur = Array.from(traitsEl.selectedOptions).map((o) => o.value);
+                    traitsEl.innerHTML =
+                        (traits.length ? traits.map((t) => '<option value="' + escapeHtml(t) + '">' + escapeHtml(t) + "</option>").join("") : '<option value="">—</option>');
+                    cur.forEach((v) => {
+                        const opt = Array.from(traitsEl.options).find((o) => o.value === v);
+                        if (opt) opt.selected = true;
+                    });
+                }
+
+                const recipesEl = $("filter-recipes");
+                if (recipesEl) {
+                    const cur = Array.from(recipesEl.selectedOptions).map((o) => o.value);
+                    recipesEl.innerHTML =
+                        (recipes.length ? recipes.map((r) => '<option value="' + escapeHtml(r) + '">' + escapeHtml(r) + "</option>").join("") : '<option value="">—</option>');
+                    cur.forEach((v) => {
+                        const opt = Array.from(recipesEl.options).find((o) => o.value === v);
+                        if (opt) opt.selected = true;
+                    });
+                }
+            }
+
+            function applyPlayerFilters() {
+                renderPlayers(getFilteredPlayers());
+                updateExportPlayersState();
+            }
+
             // Players
             async function loadPlayers() {
                 try {
                     const res = await fetch("/api/players");
                     if (!res.ok) throw new Error(res.statusText);
                     allPlayers = await res.json();
-                    renderPlayers(allPlayers);
-                    updateExportPlayersState();
+                    updatePlayerFilterOptions();
+                    applyPlayerFilters();
                 } catch (e) {
                     $("player-list").innerHTML = '<tr><td colspan="7" class="error">Failed to load: ' + e.message + "</td></tr>";
                 }
@@ -1088,17 +1188,10 @@
                     .join("");
             }
 
-            $("search-players").addEventListener("input", (e) => {
-                const term = e.target.value.toLowerCase();
-                const filtered = allPlayers.filter(
-                    (p) =>
-                        (p.name && p.name.toLowerCase().includes(term)) ||
-                        (p.username && p.username.toLowerCase().includes(term)) ||
-                        (p.profession && p.profession.toLowerCase().includes(term))
-                );
-                renderPlayers(filtered);
-                updateExportPlayersState();
-            });
+            $("search-players").addEventListener("input", applyPlayerFilters);
+            $("filter-profession").addEventListener("change", applyPlayerFilters);
+            $("filter-traits").addEventListener("change", applyPlayerFilters);
+            $("filter-recipes").addEventListener("change", applyPlayerFilters);
 
             // Modal
             const overlay = $("modal-overlay");
@@ -1156,6 +1249,9 @@
                 if (data.username) {
                     html += "<li><strong>Username</strong>: " + escapeHtml(data.username) + "</li>";
                 }
+                if (e.usernameFromBuffer && e.usernameFromBuffer !== data.username) {
+                    html += "<li><strong>Username (from buffer)</strong>: " + escapeHtml(e.usernameFromBuffer) + "</li>";
+                }
                 html += "<li><strong>Position</strong>: " + (data.x != null ? data.x : "—") + ", " + (data.y != null ? data.y : "—") + (data.z != null ? ", " + data.z : "") + "</li>";
                 if (e.characterNames && e.characterNames.length) {
                     html += "<li><strong>Names</strong>: " + escapeHtml(e.characterNames.join(", ")) + "</li>";
@@ -1170,6 +1266,37 @@
                     html += "<li><strong>Stats</strong>: " + escapeHtml(e.statNames.join(", ")) + "</li>";
                 }
                 html += "</ul></div>";
+
+                if (e.appearance && e.appearance.length) {
+                    html += '<div class="detail-section"><h3>Appearance</h3><ul><li>' + escapeHtml(e.appearance.join(", ")) + "</li></ul></div>";
+                }
+                if (e.clothingTypes && e.clothingTypes.length) {
+                    html += '<div class="detail-section"><h3>Clothing / equipment</h3><ul><li><strong>Types</strong>: ' + escapeHtml(e.clothingTypes.join(", ")) + "</li>";
+                    if (e.clothingCustomNames && e.clothingCustomNames.length) {
+                        html += "<li><strong>Custom names</strong>: " + escapeHtml(e.clothingCustomNames.join(", ")) + "</li>";
+                    }
+                    html += "</ul></div>";
+                }
+                if (e.inventoryStrings && e.inventoryStrings.length) {
+                    html += '<div class="detail-section"><h3>Inventory</h3><ul>';
+                    e.inventoryStrings.slice(0, 20).forEach((s) => {
+                        html += "<li>" + escapeHtml(s) + "</li>";
+                    });
+                    if (e.inventoryStrings.length > 20) html += "<li>… and " + (e.inventoryStrings.length - 20) + " more</li>";
+                    html += "</ul></div>";
+                }
+                if (e.recipeIds && e.recipeIds.length) {
+                    const show = 15;
+                    html += '<div class="detail-section"><h3>Recipes</h3><ul><li>' + escapeHtml(e.recipeIds.slice(0, show).join(", ")) + (e.recipeIds.length > show ? " … and " + (e.recipeIds.length - show) + " more" : "") + "</li></ul></div>";
+                }
+                if (e.skillXp && Object.keys(e.skillXp).length) {
+                    html += '<div class="detail-section"><h3>Skill XP (raw)</h3><p class="hint">Numeric values per skill; levels will be interpreted in the frontend later.</p><ul>';
+                    for (const [skill, values] of Object.entries(e.skillXp)) {
+                        html += "<li><strong>" + escapeHtml(skill) + "</strong>: " + (Array.isArray(values) ? values.join(", ") : String(values)) + "</li>";
+                    }
+                    html += "</ul></div>";
+                }
+
                 html += '<div class="detail-section"><button type="button" class="raw-toggle">Show raw buffer</button><pre class="raw-content hidden" id="raw-content"></pre></div>';
                 window._modalRaw = data.raw || [];
                 return html;
