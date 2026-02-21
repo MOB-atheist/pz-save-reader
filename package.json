@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "server": "node index.js",
+    "server:debug": "cross-env DEBUG_PZ_DECODE=1 node index.js",
     "server:watch": "nodemon index.js",
     "start": "concurrently \"npm run server\" \"wait-on tcp:127.0.0.1:3000 --timeout 60000 && npm run dev\"",
     "start:watch": "concurrently \"npm run server:watch\" \"wait-on tcp:127.0.0.1:3000 --timeout 60000 && npm run dev\""
@@ -32,6 +33,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "nodemon": "^3.1.9",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
