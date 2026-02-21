@@ -3,3 +3,4 @@ node_modules
 .cursor
 vehicles.db
 players.db
+pz-manager-config.json

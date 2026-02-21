@@ -3,30 +3,90 @@ const sqlite3 = require("sqlite3").verbose();
 const path = require("path");
 const { decodePzBuffer } = require("./lib/decode-pz-buffer");
 const config = require("./config");
+const runtimeConfig = require("./lib/runtime-config");
 
 const app = express();
 const port = config.port;
 
-// Database connections
-const vehiclesDb = new sqlite3.Database(config.vehiclesDbPath, (err) => {
-    if (err) console.error("Error opening vehicles DB:", err.message);
-    else console.log("Connected to vehicles DB:", config.vehiclesDbPath);
-});
+app.use(express.json());
 
+// Database connections (reopened when config changes)
+let vehiclesDb = null;
 let playersDb = null;
 let playersTableName = null;
 let playersColumns = ["id", "data"];
 
+function getPaths() {
+    const raw = runtimeConfig.load();
+    return runtimeConfig.getResolvedPaths(raw);
+}
+
+function openVehiclesDb() {
+    const { vehiclesDbPath } = getPaths();
+    return new sqlite3.Database(vehiclesDbPath, (err) => {
+        if (err) console.error("Error opening vehicles DB:", err.message);
+        else console.log("Connected to vehicles DB:", vehiclesDbPath);
+    });
+}
+
+function openPlayersDb() {
+    const { playersDbPath } = getPaths();
+    return new sqlite3.Database(playersDbPath, (err) => {
+        if (err) {
+            console.error("Error opening players DB:", err.message);
+            return null;
+        }
+        console.log("Connected to players DB:", playersDbPath);
+        return undefined;
+    });
+}
+
+function closeVehiclesDb() {
+    if (vehiclesDb) {
+        try {
+            vehiclesDb.close();
+        } catch (e) {
+            // ignore
+        }
+        vehiclesDb = null;
+    }
+}
+
+function closePlayersDb() {
+    if (playersDb) {
+        try {
+            playersDb.close();
+        } catch (e) {
+            // ignore
+        }
+        playersDb = null;
+        playersTableName = null;
+    }
+}
+
+function reconnectDbs() {
+    closeVehiclesDb();
+    closePlayersDb();
+    vehiclesDb = openVehiclesDb();
+}
+
+// Initial connection
+vehiclesDb = openVehiclesDb();
+
 function ensurePlayersDb() {
-    if (playersDb) return Promise.resolve();
+    if (playersDb) return Promise.resolve(undefined);
     return new Promise((resolve, reject) => {
-        playersDb = new sqlite3.Database(config.playersDbPath, (err) => {
+        playersDb = openPlayersDb();
+        if (!playersDb) {
+            reject(new Error("Could not open players DB"));
+            return;
+        }
+        playersDb.get("SELECT 1", [], (err) => {
             if (err) {
-                console.error("Error opening players DB:", err.message);
+                playersDb = null;
                 reject(err);
                 return;
             }
-            console.log("Connected to players DB:", config.playersDbPath);
             resolve(undefined);
         });
     });
@@ -66,6 +126,30 @@ function discoverPlayersTable() {
 
 // Static files (must be before catch-all so / and /players.html are served)
 app.use(express.static(path.join(__dirname, "public")));
+
+// --- API: Config (global settings) ---
+app.get("/api/config", (req, res) => {
+    try {
+        res.json(runtimeConfig.getConfigForApi());
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.put("/api/config", (req, res) => {
+    try {
+        const body = req.body || {};
+        runtimeConfig.save({
+            saveFolder: body.saveFolder,
+            vehiclesDbPath: body.vehiclesDbPath,
+            playersDbPath: body.playersDbPath,
+        });
+        reconnectDbs();
+        res.json(runtimeConfig.getConfigForApi());
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
 
 // --- API: Vehicles ---
 app.get("/api/vehicles", (req, res) => {
@@ -116,7 +200,6 @@ app.get("/api/players", (req, res) => {
     ensurePlayersDb()
         .then(() => discoverPlayersTable())
         .then(() => {
-            const hasCoord = playersColumns.some((c) => c.toLowerCase() === "x" || c.toLowerCase() === "y");
             const cols = ["id", "data"];
             if (playersColumns.includes("x")) cols.push("x");
             if (playersColumns.includes("y")) cols.push("y");
@@ -182,11 +265,14 @@ app.get("/api/players/:id", (req, res) => {
         .catch((e) => res.status(500).json({ error: e.message }));
 });
 
-// SPA fallback: serve index.html for non-API routes so / and /players work with client-side routing
+// SPA fallback: serve index.html for non-API routes
 app.get("/vehicles", (req, res) => {
     res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 app.get("/players", (req, res) => {
+    res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+app.get("/settings", (req, res) => {
     res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
