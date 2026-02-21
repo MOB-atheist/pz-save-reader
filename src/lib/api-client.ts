@@ -66,6 +66,7 @@ export interface PlayerRow {
     inventoryStrings?: string[];
     recipeIds?: string[];
     skillXp?: Record<string, unknown>;
+    skillLevels?: Record<string, number>;
   };
   raw?: number[];
 }

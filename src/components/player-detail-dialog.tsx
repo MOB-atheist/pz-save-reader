@@ -6,6 +6,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { getPlayerById, type PlayerRow } from "@/lib/api-client";
 
 // Known PZ stat/skill names — don't show as "Username (from buffer)" when decoder misclassifies
@@ -32,12 +33,14 @@ export function PlayerDetailDialog({ id, open, onOpenChange }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rawOpen, setRawOpen] = useState(false);
+  const [xpOpen, setXpOpen] = useState(false);
 
   useEffect(() => {
     if (!open || id == null) {
       setData(null);
       setError(null);
       setRawOpen(false);
+      setXpOpen(false);
       return;
     }
     setLoading(true);
@@ -106,13 +109,46 @@ export function PlayerDetailDialog({ id, open, onOpenChange }: Props) {
                       {e.traitOrSkillIds.length > 15 ? " …" : ""}
                     </li>
                   ) : null}
-                  {e.statNames?.length ? (
+                  {e.statNames?.length && !(e.skillLevels && Object.keys(e.skillLevels).length) ? (
                     <li>
                       <strong>Stats</strong>: {e.statNames.join(", ")}
                     </li>
                   ) : null}
                 </ul>
               </section>
+              {(e.skillLevels && Object.keys(e.skillLevels).length > 0) || (e.statNames && e.statNames.length > 0) ? (
+                <section className="mb-5 pl-3 border-l-4 border-primary/30">
+                  <h3 className="text-sm font-medium text-foreground mb-2">
+                    Skill levels
+                  </h3>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    From save data. Level 0–10.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {e.skillLevels && Object.keys(e.skillLevels).length > 0
+                      ? Object.entries(e.skillLevels)
+                          .sort(([a], [b]) => a.localeCompare(b))
+                          .map(([skill, level]) => (
+                            <Badge
+                              key={skill}
+                              variant="secondary"
+                              className="font-normal"
+                            >
+                              {skill} {level}
+                            </Badge>
+                          ))
+                      : (e.statNames || []).map((skill) => (
+                          <Badge
+                            key={skill}
+                            variant="outline"
+                            className="font-normal"
+                          >
+                            {skill} —
+                          </Badge>
+                        ))}
+                  </div>
+                </section>
+              ) : null}
               {e.appearance?.length ? (
                 <section className="mb-5 pl-3 border-l-4 border-primary/30">
                   <h3 className="text-sm font-medium text-foreground mb-2">
@@ -173,23 +209,32 @@ export function PlayerDetailDialog({ id, open, onOpenChange }: Props) {
               ) : null}
               {e.skillXp && Object.keys(e.skillXp).length > 0 ? (
                 <section className="mb-5 pl-3 border-l-4 border-primary/30">
-                  <h3 className="text-sm font-medium text-foreground mb-2">
-                    Skill XP (raw)
-                  </h3>
-                  <p className="text-xs text-muted-foreground mb-2">
-                    Numeric values per skill; levels will be interpreted in the
-                    frontend later.
-                  </p>
-                  <ul className="list-none space-y-1 text-sm bg-muted/50 rounded-md p-3">
-                    {Object.entries(e.skillXp).map(([skill, values]) => (
-                      <li key={skill}>
-                        <strong>{skill}</strong>:{" "}
-                        {Array.isArray(values)
-                          ? values.join(", ")
-                          : String(values)}
-                      </li>
-                    ))}
-                  </ul>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-auto p-0 text-sm font-medium text-foreground hover:bg-transparent"
+                    onClick={() => setXpOpen((o) => !o)}
+                  >
+                    {xpOpen ? "Hide raw XP values" : "Show raw XP values"}
+                  </Button>
+                  {xpOpen && (
+                    <>
+                      <p className="text-xs text-muted-foreground mt-1 mb-2">
+                        Numeric values per skill from buffer.
+                      </p>
+                      <ul className="list-none space-y-1 text-sm bg-muted/50 rounded-md p-3">
+                        {Object.entries(e.skillXp).map(([skill, values]) => (
+                          <li key={skill}>
+                            <strong>{skill}</strong>:{" "}
+                            {Array.isArray(values)
+                              ? values.join(", ")
+                              : String(values)}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
                 </section>
               ) : null}
               <section className="mb-5 pl-3 border-l-4 border-primary/30">
