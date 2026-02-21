@@ -15,7 +15,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const port = config.port;
 
-app.use(express.json());
+// Allow large uploads (vehicles.db / players.db as base64); default is ~100kb
+app.use(express.json({ limit: "50mb" }));
 
 // API routes must be registered before static so POST /api/sync etc. are always handled
 const SNAPSHOT_DIR = path.join(__dirname, "data", "snapshots");
