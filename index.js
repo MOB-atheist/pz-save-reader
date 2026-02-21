@@ -13,121 +13,119 @@ const port = config.port;
 
 app.use(express.json());
 
-// Database connections (reopened when config changes)
-let vehiclesDb = null;
-let playersDb = null;
-let playersTableName = null;
-let playersColumns = ["id", "data"];
+const SNAPSHOT_DIR = path.join(__dirname, "data", "snapshots");
 
 function getPaths() {
     const raw = runtimeConfig.load();
     return runtimeConfig.getResolvedPaths(raw);
 }
 
-function openVehiclesDb() {
-    const paths = getPaths();
-    if (!paths) return null;
-    return new sqlite3.Database(paths.vehiclesDbPath, (err) => {
-        if (err) console.error("Error opening vehicles DB:", err.message);
-        else console.log("Connected to vehicles DB:", paths.vehiclesDbPath);
-    });
-}
-
-function openPlayersDb() {
-    const paths = getPaths();
-    if (!paths) return null;
-    return new sqlite3.Database(paths.playersDbPath, (err) => {
-        if (err) {
-            console.error("Error opening players DB:", err.message);
-            return;
-        }
-        console.log("Connected to players DB:", paths.playersDbPath);
-    });
-}
-
-function closeVehiclesDb() {
-    if (vehiclesDb) {
-        try {
-            vehiclesDb.close();
-        } catch (e) {
-            // ignore
-        }
-        vehiclesDb = null;
-    }
-}
-
-function closePlayersDb() {
-    if (playersDb) {
-        try {
-            playersDb.close();
-        } catch (e) {
-            // ignore
-        }
-        playersDb = null;
-        playersTableName = null;
-    }
-}
-
-function reconnectDbs() {
-    closeVehiclesDb();
-    closePlayersDb();
-    const paths = getPaths();
-    if (paths) {
-        vehiclesDb = openVehiclesDb();
-        playersDb = openPlayersDb();
-    }
-}
-
-// No DB at startup; connections are opened when config exists and API is used
-
-function ensurePlayersDb() {
-    if (playersDb) return Promise.resolve(undefined);
+/**
+ * Discover players table name and columns from an open SQLite DB (e.g. snapshot copy).
+ * @param {object} db - Open sqlite3 Database instance
+ * @returns {Promise<{ tableName: string, columns: string[] }>}
+ */
+function discoverPlayersTableFromDb(db) {
     return new Promise((resolve, reject) => {
-        playersDb = openPlayersDb();
-        if (!playersDb) {
-            reject(new Error("Could not open players DB"));
-            return;
-        }
-        playersDb.get("SELECT 1", [], (err) => {
-            if (err) {
-                playersDb = null;
-                reject(err);
-                return;
-            }
-            resolve(undefined);
-        });
-    });
-}
-
-function discoverPlayersTable() {
-    if (playersTableName) return Promise.resolve(playersTableName);
-    return new Promise((resolve, reject) => {
-        playersDb.all(
+        db.all(
             "SELECT name FROM sqlite_master WHERE type='table' AND (name='networkPlayers' OR name='localPlayers') ORDER BY name",
             [],
             (err, rows) => {
-                if (err) {
-                    reject(err);
-                    return;
-                }
-                if (rows.length) {
-                    playersTableName = rows[0].name;
-                    playersDb.all(
-                        `PRAGMA table_info(${playersTableName})`,
-                        [],
-                        (e, cols) => {
-                            if (!e && cols.length) {
-                                playersColumns = cols.map((c) => c.name);
-                            }
-                            resolve(playersTableName);
-                        }
-                    );
-                } else {
-                    playersTableName = "networkPlayers";
-                    resolve(playersTableName);
-                }
+                if (err) return reject(err);
+                const tableName = rows.length ? rows[0].name : "networkPlayers";
+                db.all(`PRAGMA table_info(${tableName})`, [], (e, cols) => {
+                    if (e) return reject(e);
+                    resolve({
+                        tableName,
+                        columns: (cols || []).map((c) => c.name),
+                    });
+                });
             }
         );
+    });
+}
+
+/**
+ * Copy game DBs to snapshot dir, open copies, sync into cache, then close and remove copies.
+ * Avoids locking the game's files.
+ * @param {Function} callback - (err) => void
+ */
+function syncFromSnapshots(callback) {
+    const paths = getPaths();
+    if (!paths) return callback(null);
+
+    const vehiclesSnapshotPath = path.join(SNAPSHOT_DIR, "vehicles.db");
+    const playersSnapshotPath = path.join(SNAPSHOT_DIR, "players.db");
+
+    try {
+        if (!fs.existsSync(path.dirname(SNAPSHOT_DIR))) {
+            fs.mkdirSync(path.dirname(SNAPSHOT_DIR), { recursive: true });
+        }
+        if (!fs.existsSync(SNAPSHOT_DIR)) {
+            fs.mkdirSync(SNAPSHOT_DIR, { recursive: true });
+        }
+        if (!fs.existsSync(paths.vehiclesDbPath)) {
+            return callback(new Error("Vehicles DB not found: " + paths.vehiclesDbPath));
+        }
+        if (!fs.existsSync(paths.playersDbPath)) {
+            return callback(new Error("Players DB not found: " + paths.playersDbPath));
+        }
+        fs.copyFileSync(paths.vehiclesDbPath, vehiclesSnapshotPath);
+        fs.copyFileSync(paths.playersDbPath, playersSnapshotPath);
+    } catch (e) {
+        return callback(e);
+    }
+
+    let opened = 0;
+    let openErr = null;
+
+    function maybeRunSync() {
+        if (openErr) return;
+        opened++;
+        if (opened !== 2) return;
+        discoverPlayersTableFromDb(snapshotPlayersDb)
+            .then(({ tableName, columns }) => {
+                const cols = columns.length ? columns : ["id", "data"];
+                cacheDb.syncVehicles(snapshotVehiclesDb, decodePzBuffer, (err) => {
+                    if (err) return done(err);
+                    cacheDb.syncPlayers(snapshotPlayersDb, tableName, cols, decodePzBuffer, (err2) => {
+                        done(err2);
+                    });
+                });
+            })
+            .catch((e) => done(e));
+    }
+
+    function cleanupAndCallback(err) {
+        try { fs.unlinkSync(vehiclesSnapshotPath); } catch (_) {}
+        try { fs.unlinkSync(playersSnapshotPath); } catch (_) {}
+        callback(err);
+    }
+
+    function done(syncErr) {
+        snapshotVehiclesDb.close(() => {
+            snapshotPlayersDb.close(() => cleanupAndCallback(syncErr));
+        });
+    }
+
+    const snapshotVehiclesDb = new sqlite3.Database(vehiclesSnapshotPath, (err) => {
+        if (err) {
+            openErr = err;
+            try { fs.unlinkSync(vehiclesSnapshotPath); } catch (_) {}
+            try { fs.unlinkSync(playersSnapshotPath); } catch (_) {}
+            return callback(err);
+        }
+        maybeRunSync();
+    });
+    const snapshotPlayersDb = new sqlite3.Database(playersSnapshotPath, (err) => {
+        if (err) {
+            openErr = err;
+            snapshotVehiclesDb.close(() => {});
+            try { fs.unlinkSync(vehiclesSnapshotPath); } catch (_) {}
+            try { fs.unlinkSync(playersSnapshotPath); } catch (_) {}
+            return callback(err);
+        }
+        maybeRunSync();
     });
 }
 
@@ -202,27 +200,14 @@ app.put("/api/config", (req, res) => {
             vehiclesDbPath: body.vehiclesDbPath,
             playersDbPath: body.playersDbPath,
         });
-        reconnectDbs();
         const paths = getPaths();
-        if (!paths || !vehiclesDb) {
+        if (!paths) {
             cacheDb.clearCache(() => res.json(runtimeConfig.getConfigForApi()));
             return;
         }
-        cacheDb.syncVehicles(vehiclesDb, decodePzBuffer, (err) => {
-            if (err) {
-                return res.status(500).json({ error: err.message });
-            }
-            if (!playersDb) {
-                return res.json(runtimeConfig.getConfigForApi());
-            }
-            discoverPlayersTable()
-                .then(() => {
-                    cacheDb.syncPlayers(playersDb, playersTableName, playersColumns, decodePzBuffer, (err2) => {
-                        if (err2) return res.status(500).json({ error: err2.message });
-                        res.json(runtimeConfig.getConfigForApi());
-                    });
-                })
-                .catch((e) => res.status(500).json({ error: e.message }));
+        syncFromSnapshots((err) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json(runtimeConfig.getConfigForApi());
         });
     } catch (e) {
         res.status(500).json({ error: e.message });
