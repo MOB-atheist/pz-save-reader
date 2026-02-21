@@ -1,6 +1,8 @@
 const express = require("express");
 const sqlite3 = require("sqlite3").verbose();
 const path = require("path");
+const fs = require("fs");
+const os = require("os");
 const { decodePzBuffer } = require("./lib/decode-pz-buffer");
 const config = require("./config");
 const runtimeConfig = require("./lib/runtime-config");
@@ -131,6 +133,57 @@ function discoverPlayersTable() {
 
 // Static files (must be before catch-all so / and /players.html are served)
 app.use(express.static(path.join(__dirname, "public")));
+
+// --- API: Browse filesystem (for Settings path picker) ---
+app.get("/api/browse", (req, res) => {
+    try {
+        let reqPath = (typeof req.query.path === "string" ? req.query.path : "").trim();
+        const isWin = os.platform() === "win32";
+        if (!reqPath) {
+            if (isWin) {
+                const drives = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                    .split("")
+                    .map((d) => d + ":\\")
+                    .filter((d) => {
+                        try {
+                            return fs.existsSync(d);
+                        } catch {
+                            return false;
+                        }
+                    });
+                if (drives.length === 0) drives.push("C:\\");
+                return res.json({
+                    path: "",
+                    entries: drives.map((d) => ({ name: d, isDirectory: true })),
+                });
+            }
+            reqPath = "/";
+        }
+        const resolved = path.resolve(reqPath);
+        if (!fs.existsSync(resolved)) {
+            return res.status(404).json({ error: "Path not found" });
+        }
+        const stat = fs.statSync(resolved);
+        if (!stat.isDirectory()) {
+            return res.status(400).json({ error: "Not a directory" });
+        }
+        const entries = fs.readdirSync(resolved, { withFileTypes: true }).map((d) => ({
+            name: d.name,
+            isDirectory: d.isDirectory(),
+        }));
+        entries.sort((a, b) => {
+            if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+            return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+        });
+        const parent = path.dirname(resolved);
+        if (parent !== resolved) {
+            entries.unshift({ name: "..", isDirectory: true });
+        }
+        res.json({ path: resolved, entries });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
 
 // --- API: Config (global settings) ---
 app.get("/api/config", (req, res) => {

@@ -251,6 +251,80 @@
                 background: #3a1a1a;
                 color: #f88;
             }
+            .input-with-browse {
+                display: flex;
+                gap: 8px;
+                align-items: center;
+                margin-bottom: 8px;
+            }
+            .input-with-browse input {
+                flex: 1;
+                margin-bottom: 0;
+            }
+            .btn-browse {
+                background: #444;
+                color: #eee;
+                border: 1px solid #555;
+                padding: 12px 16px;
+                border-radius: 4px;
+                cursor: pointer;
+                white-space: nowrap;
+            }
+            .btn-browse:hover {
+                background: #555;
+            }
+            .btn-secondary {
+                background: #333;
+                color: #eee;
+                border: 1px solid #555;
+                padding: 10px 16px;
+                border-radius: 4px;
+                cursor: pointer;
+            }
+            .btn-secondary:hover {
+                background: #444;
+            }
+            .browse-modal .modal-body {
+                min-height: 300px;
+            }
+            .browse-path {
+                font-size: 0.9rem;
+                color: #aaa;
+                margin: 0 0 12px 0;
+                word-break: break-all;
+            }
+            .browse-list {
+                border: 1px solid #444;
+                border-radius: 4px;
+                max-height: 280px;
+                overflow-y: auto;
+                margin-bottom: 16px;
+                background: #1a1a1a;
+            }
+            .browse-list .browse-entry {
+                padding: 10px 12px;
+                cursor: pointer;
+                border-bottom: 1px solid #252525;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .browse-list .browse-entry:last-child {
+                border-bottom: none;
+            }
+            .browse-list .browse-entry:hover {
+                background: #252525;
+            }
+            .browse-list .browse-entry.folder::before {
+                content: "📁 ";
+            }
+            .browse-list .browse-entry.file::before {
+                content: "📄 ";
+            }
+            .browse-actions {
+                display: flex;
+                gap: 12px;
+            }
             .config-current {
                 background: #1a1a1a;
                 padding: 12px;
@@ -358,16 +432,25 @@
                 <form id="config-form">
                     <div class="form-group">
                         <label for="config-save-folder">Save folder</label>
-                        <input type="text" id="config-save-folder" placeholder="e.g. C:\Users\You\Zomboid\Saves\Multiplayer\servertest" />
+                        <div class="input-with-browse">
+                            <input type="text" id="config-save-folder" placeholder="e.g. C:\Users\You\Zomboid\Saves\Multiplayer\servertest" />
+                            <button type="button" class="btn-browse" id="browse-save-folder" aria-label="Browse">Browse</button>
+                        </div>
                         <div class="hint">Folder containing vehicles.db and players.db. Used when custom paths below are empty.</div>
                     </div>
                     <div class="form-group">
                         <label for="config-vehicles-path">Vehicles DB path (optional override)</label>
-                        <input type="text" id="config-vehicles-path" placeholder="Leave empty to use Save folder + vehicles.db" />
+                        <div class="input-with-browse">
+                            <input type="text" id="config-vehicles-path" placeholder="Leave empty to use Save folder + vehicles.db" />
+                            <button type="button" class="btn-browse" id="browse-vehicles-path" aria-label="Browse">Browse</button>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label for="config-players-path">Players DB path (optional override)</label>
-                        <input type="text" id="config-players-path" placeholder="Leave empty to use Save folder + players.db" />
+                        <div class="input-with-browse">
+                            <input type="text" id="config-players-path" placeholder="Leave empty to use Save folder + players.db" />
+                            <button type="button" class="btn-browse" id="browse-players-path" aria-label="Browse">Browse</button>
+                        </div>
                     </div>
                     <button type="submit" class="btn-primary" id="config-save-btn">Save configuration</button>
                 </form>
@@ -382,6 +465,23 @@
                     <button type="button" class="modal-close" id="modal-close" aria-label="Close">&times;</button>
                 </div>
                 <div class="modal-body" id="modal-body"></div>
+            </div>
+        </div>
+
+        <div id="browse-overlay" class="modal-overlay hidden">
+            <div class="modal browse-modal">
+                <div class="modal-header">
+                    <h2 id="browse-title">Select folder</h2>
+                    <button type="button" class="modal-close" id="browse-close" aria-label="Close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="browse-path" id="browse-path-display"></p>
+                    <div class="browse-list" id="browse-list"></div>
+                    <div class="browse-actions">
+                        <button type="button" class="btn-primary" id="browse-select-btn">Select this folder</button>
+                        <button type="button" class="btn-secondary" id="browse-cancel-btn">Cancel</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -470,6 +570,96 @@
                     btn.disabled = false;
                 }
             });
+
+            // Browse modal for path selection
+            let browseState = { targetInputId: null, mode: "folder", currentPath: "" };
+
+            function pathJoin(dir, name) {
+                if (!dir) return name;
+                const sep = dir.indexOf("\\") !== -1 ? "\\" : "/";
+                return dir.replace(/[/\\]+$/, "") + sep + name;
+            }
+
+            function pathParent(p) {
+                const i = Math.max(p.lastIndexOf("\\"), p.lastIndexOf("/"));
+                return i <= 0 ? "" : p.substring(0, i);
+            }
+
+            async function loadBrowseList(pathParam) {
+                const pathDisplay = $("browse-path-display");
+                const listEl = $("browse-list");
+                pathDisplay.textContent = pathParam || "(Computer)";
+                listEl.innerHTML = "Loading…";
+                try {
+                    const q = pathParam ? "?path=" + encodeURIComponent(pathParam) : "";
+                    const res = await fetch("/api/browse" + q);
+                    if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+                    const data = await res.json();
+                    browseState.currentPath = data.path || pathParam || "";
+                    listEl.innerHTML = data.entries.map((e) => {
+                        const cls = e.isDirectory ? "folder" : "file";
+                        return '<div class="browse-entry ' + cls + '" data-name="' + escapeHtml(e.name) + '" data-dir="' + (e.isDirectory ? "1" : "0") + '">' + escapeHtml(e.name) + "</div>";
+                    }).join("");
+                } catch (err) {
+                    listEl.innerHTML = "<div class=\"browse-entry\">Error: " + escapeHtml(err.message) + "</div>";
+                }
+            }
+
+            function openBrowseModal(targetInputId, mode) {
+                browseState.targetInputId = targetInputId;
+                browseState.mode = mode;
+                const input = $(targetInputId);
+                let startPath = (input && input.value && input.value.trim()) || "";
+                if (mode === "file" && startPath) {
+                    const sep = startPath.indexOf("\\") !== -1 ? "\\" : "/";
+                    const last = Math.max(startPath.lastIndexOf("\\"), startPath.lastIndexOf("/"));
+                    startPath = last > 0 ? startPath.substring(0, last) : "";
+                }
+                browseState.currentPath = startPath;
+                $("browse-title").textContent = mode === "folder" ? "Select folder" : "Select file";
+                $("browse-select-btn").textContent = mode === "folder" ? "Select this folder" : "Select this folder";
+                $("browse-select-btn").style.display = mode === "folder" ? "inline-block" : "none";
+                $("browse-overlay").classList.remove("hidden");
+                loadBrowseList(startPath);
+            }
+
+            function closeBrowseModal() {
+                $("browse-overlay").classList.add("hidden");
+                browseState.targetInputId = null;
+            }
+
+            $("browse-close").addEventListener("click", closeBrowseModal);
+            $("browse-cancel-btn").addEventListener("click", closeBrowseModal);
+            $("browse-select-btn").addEventListener("click", () => {
+                if (browseState.mode === "folder" && browseState.targetInputId) {
+                    $(browseState.targetInputId).value = browseState.currentPath;
+                    closeBrowseModal();
+                }
+            });
+
+            $("browse-list").addEventListener("click", (e) => {
+                const entry = e.target.closest(".browse-entry");
+                if (!entry) return;
+                const name = entry.getAttribute("data-name");
+                const isDir = entry.getAttribute("data-dir") === "1";
+                if (!name) return;
+                if (isDir) {
+                    if (name === "..") {
+                        loadBrowseList(pathParent(browseState.currentPath));
+                    } else {
+                        loadBrowseList(pathJoin(browseState.currentPath, name));
+                    }
+                } else {
+                    if (browseState.mode === "file" && browseState.targetInputId) {
+                        $(browseState.targetInputId).value = pathJoin(browseState.currentPath, name);
+                        closeBrowseModal();
+                    }
+                }
+            });
+
+            $("browse-save-folder").addEventListener("click", () => openBrowseModal("config-save-folder", "folder"));
+            $("browse-vehicles-path").addEventListener("click", () => openBrowseModal("config-vehicles-path", "file"));
+            $("browse-players-path").addEventListener("click", () => openBrowseModal("config-players-path", "file"));
 
             // Vehicles
             async function loadVehicles() {
