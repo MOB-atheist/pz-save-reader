@@ -13,6 +13,7 @@ const port = config.port;
 
 app.use(express.json());
 
+// API routes must be registered before static so POST /api/sync etc. are always handled
 const SNAPSHOT_DIR = path.join(__dirname, "data", "snapshots");
 
 function getPaths() {
@@ -128,9 +129,6 @@ function syncFromSnapshots(callback) {
         maybeRunSync();
     });
 }
-
-// Static files (must be before catch-all so / and /players.html are served)
-app.use(express.static(path.join(__dirname, "public")));
 
 // --- API: Browse filesystem (for Settings path picker) ---
 app.get("/api/browse", (req, res) => {
@@ -260,7 +258,8 @@ app.get("/api/players/:id", (req, res) => {
     });
 });
 
-// SPA fallback: serve index.html for non-API routes
+// Static files and SPA fallback (after all API routes)
+app.use(express.static(path.join(__dirname, "public")));
 app.get("/vehicles", (req, res) => {
     res.sendFile(path.join(__dirname, "public", "index.html"));
 });
