@@ -684,11 +684,27 @@
                 });
             }
 
+            /** Only pick vehicles.db and players.db from the folder; prefer root-level files. */
+            function findDbFilesInFolder(files) {
+                const list = Array.from(files);
+                const isRoot = (f) => {
+                    const parts = (f.webkitRelativePath || f.name || "").split("/");
+                    return parts.length === 2 && (parts[1] === "vehicles.db" || parts[1] === "players.db");
+                };
+                const rootVehicles = list.find((f) => f.name && f.name.toLowerCase() === "vehicles.db" && isRoot(f));
+                const rootPlayers = list.find((f) => f.name && f.name.toLowerCase() === "players.db" && isRoot(f));
+                const anyVehicles = list.find((f) => f.name && f.name.toLowerCase() === "vehicles.db");
+                const anyPlayers = list.find((f) => f.name && f.name.toLowerCase() === "players.db");
+                return {
+                    vehiclesFile: rootVehicles || anyVehicles,
+                    playersFile: rootPlayers || anyPlayers,
+                };
+            }
+
             async function uploadFromFolder(files) {
-                const vehiclesFile = Array.from(files).find((f) => f.name.toLowerCase() === "vehicles.db");
-                const playersFile = Array.from(files).find((f) => f.name.toLowerCase() === "players.db");
+                const { vehiclesFile, playersFile } = findDbFilesInFolder(files);
                 if (!vehiclesFile || !playersFile) {
-                    alert("Folder must contain both vehicles.db and players.db.");
+                    alert("Folder must contain both vehicles.db and players.db. Only these two files are used.");
                     return;
                 }
                 const statusEl = $("upload-status");
@@ -696,11 +712,12 @@
                 const vehiclesNameEl = $("file-vehicles-name");
                 const playersNameEl = $("file-players-name");
                 statusEl.classList.remove("hidden", "success");
-                msgEl.textContent = "Uploading…";
+                msgEl.textContent = "Uploading vehicles.db and players.db…";
                 vehiclesNameEl.textContent = "";
                 playersNameEl.textContent = "";
                 try {
                     const [vB64, pB64] = await Promise.all([fileToBase64(vehiclesFile), fileToBase64(playersFile)]);
+                    msgEl.textContent = "Uploading vehicles.db…";
                     const vRes = await fetch("/api/upload/vehicles", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
@@ -708,7 +725,7 @@
                     });
                     const vData = await vRes.json().catch(() => ({}));
                     if (!vRes.ok) throw new Error(vData.error || vRes.statusText);
-                    msgEl.textContent = "Uploading…";
+                    msgEl.textContent = "Uploading players.db…";
                     const pRes = await fetch("/api/upload/players", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
@@ -794,12 +811,24 @@
 
             $("file-vehicles").addEventListener("change", (e) => {
                 const file = e.target.files && e.target.files[0];
-                if (file) uploadDbFile(file, "/api/upload/vehicles", $("file-vehicles-name"));
+                if (!file) { e.target.value = ""; return; }
+                if (!file.name || !file.name.toLowerCase().endsWith(".db")) {
+                    alert("Please select a .db file (e.g. vehicles.db).");
+                    e.target.value = "";
+                    return;
+                }
+                uploadDbFile(file, "/api/upload/vehicles", $("file-vehicles-name"));
                 e.target.value = "";
             });
             $("file-players").addEventListener("change", (e) => {
                 const file = e.target.files && e.target.files[0];
-                if (file) uploadDbFile(file, "/api/upload/players", $("file-players-name"));
+                if (!file) { e.target.value = ""; return; }
+                if (!file.name || !file.name.toLowerCase().endsWith(".db")) {
+                    alert("Please select a .db file (e.g. players.db).");
+                    e.target.value = "";
+                    return;
+                }
+                uploadDbFile(file, "/api/upload/players", $("file-players-name"));
                 e.target.value = "";
             });
 
